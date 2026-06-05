@@ -10,6 +10,7 @@ import {
   mockTranscript,
 } from "./lib/mock-analysis.mjs";
 import { createOpenAISummary } from "./lib/openai-summary.mjs";
+import { transcribeAudio } from "./lib/openai-transcribe.mjs";
 import { createRealtimeClientSecret } from "./lib/realtime-session.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -166,6 +167,33 @@ async function handleApi(req, res, url) {
   const transcribeMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/transcribe$/);
   if (req.method === "POST" && transcribeMatch) {
     const body = await readJson(req);
+    if (!shouldUseMockAnalysis() && body.audioBase64) {
+      try {
+        const result = await transcribeAudio({
+          audioBase64: body.audioBase64,
+          mimeType: body.mimeType,
+          fileName: body.fileName,
+          language: body.language || "en",
+        });
+        sendJson(res, 200, {
+          sessionId: transcribeMatch[1],
+          turnId: body.turnId || `turn_${Date.now()}`,
+          ...result,
+        });
+        return;
+      } catch (error) {
+        sendJson(res, 200, {
+          sessionId: transcribeMatch[1],
+          turnId: body.turnId || `turn_${Date.now()}`,
+          transcript: body.roughTranscript || mockTranscript(body.referenceText),
+          confidence: 0.5,
+          source: body.roughTranscript ? "rough_transcript" : "mock",
+          providerError: error.message || "OpenAI transcription failed",
+        });
+        return;
+      }
+    }
+
     sendJson(res, 200, {
       sessionId: transcribeMatch[1],
       turnId: body.turnId || `turn_${Date.now()}`,
@@ -178,10 +206,14 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/pronunciation/scripted") {
     const body = await readJson(req);
-    sendJson(res, 200, createMockPronunciationAssessment({
+    const assessment = createMockPronunciationAssessment({
       referenceText: body.referenceText,
       scenarioId: body.scenarioId,
-    }));
+    });
+    assessment.audioReceived = Boolean(body.audioBase64);
+    assessment.mimeType = body.mimeType || null;
+    assessment.durationMs = body.durationMs || null;
+    sendJson(res, 200, assessment);
     return;
   }
 

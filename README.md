@@ -31,6 +31,8 @@ node server.mjs
 ```
 
 The post-session summary uses the text model when `OPENAI_API_KEY` is configured. Set `USE_MOCK_ANALYSIS=true` to force mock reports during demos.
+`POST /api/sessions/:id/transcribe` accepts `audioBase64` + `mimeType` and uses `OPENAI_TRANSCRIBE_MODEL` when a key is configured; otherwise it falls back to rough transcript/mock text.
+The scripted pronunciation recorder now sends captured browser audio to the backend, while scoring still uses mock feedback until a pronunciation provider is connected.
 
 In another terminal, run the API smoke test:
 

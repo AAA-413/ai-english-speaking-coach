@@ -65,10 +65,25 @@ const pronunciation = await request("/api/pronunciation/scripted", {
   body: JSON.stringify({
     scenarioId: "restaurant_ordering",
     referenceText: "Could I get a medium latte with oat milk, please?",
+    audioBase64: "UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=",
+    mimeType: "audio/wav",
+    durationMs: 100,
   }),
 });
 assert(pronunciation.pronunciation >= 0, "Pronunciation response is missing score");
 assert(Array.isArray(pronunciation.weakWords), "Pronunciation response is missing weakWords");
+assert(pronunciation.audioReceived === true, "Pronunciation response did not acknowledge audio payload");
+
+const transcription = await request("/api/sessions/smoke/transcribe", {
+  method: "POST",
+  body: JSON.stringify({
+    turnId: "turn_audio",
+    roughTranscript: "Could I get a medium latte please?",
+    audioBase64: "UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=",
+    mimeType: "audio/wav",
+  }),
+});
+assert(transcription.transcript, "Transcription response is missing transcript");
 
 console.log(JSON.stringify({
   ok: true,
@@ -77,4 +92,5 @@ console.log(JSON.stringify({
   realtimeMode: realtimeSession.mode,
   summaryScore: summary.overallScore,
   pronunciationScore: pronunciation.pronunciation,
+  transcriptionSource: transcription.source,
 }, null, 2));

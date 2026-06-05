@@ -480,3 +480,5 @@ git push -u origin feat/analysis-summary-pronunciation
 - 有 `OPENAI_API_KEY` 且 `USE_MOCK_ANALYSIS` 不是 `true` 时，`POST /api/sessions/:id/summary` 会调用 OpenAI Responses API 生成结构化 JSON。
 - 没有 key、开启 `DEMO_MODE`、开启 `USE_MOCK_ANALYSIS`，或 provider 失败时，会自动返回 mock summary。
 - scripted pronunciation 和 stable transcription 仍然是 mock/passthrough，等路线 B 继续接 Azure/Speechace/STT。
+- `POST /api/sessions/:id/transcribe` 已支持 `audioBase64` + `mimeType`，有 key 时会尝试 OpenAI audio transcription，没有 key 或失败时回落到 rough transcript/mock。
+- scripted pronunciation 录音已经会把浏览器音频传到后端，当前评分仍是 mock，后续可把同一 payload 接到 Azure/Speechace。
