@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node server.mjs",
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check lib/scenarios.mjs && node --check lib/mock-analysis.mjs && node --check lib/realtime-session.mjs"
+    "check": "node --check server.mjs && node --check lib/scenarios.mjs && node --check lib/mock-analysis.mjs && node --check lib/realtime-session.mjs && node --check public/app.js && node --check scripts/smoke-test.mjs",
+    "smoke": "node scripts/smoke-test.mjs"
   },
   "engines": {
     "node": ">=20"

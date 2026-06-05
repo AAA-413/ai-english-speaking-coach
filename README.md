@@ -28,6 +28,12 @@ export OPENAI_REALTIME_MODEL="gpt-realtime-2"
 node server.mjs
 ```
 
+In another terminal, run the API smoke test:
+
+```bash
+node scripts/smoke-test.mjs
+```
+
 ## Docs
 
 - [Design draft](docs/ai-english-speaking-coach-design.md)
