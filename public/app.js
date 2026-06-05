@@ -256,10 +256,22 @@ async function startPractice() {
       setStatus("connected");
     } else if (session.mode === "volc_doubao_setup") {
       logEvent("doubao:setup", `${session.model} / room=${session.roomId}`);
+      if (session.serverStart) {
+        logEvent(
+          session.serverStart.ok ? "doubao:start_voice_chat" : `doubao:start_${session.serverStart.status}`,
+          session.serverStart.requestId || session.serverStart.message || "",
+        );
+      }
       try {
         await connectVolcDoubaoRealtime(session);
         setStatus("connected");
-        addTurn("assistant", `${scenario.openingPrompt} (Doubao O2.0 RTC room joined.)`, "mock");
+        addTurn(
+          "assistant",
+          session.serverStarted
+            ? `${scenario.openingPrompt} (Doubao O2.0 is in the RTC room.)`
+            : `${scenario.openingPrompt} (Doubao O2.0 config ready; StartVoiceChat ${session.serverStart?.status || "pending"}.)`,
+          session.serverStarted ? "doubao_seed" : "mock",
+        );
       } catch (error) {
         setStatus("mock");
         logEvent("doubao:fallback", error.message || "RTC SDK connection pending");
@@ -366,6 +378,7 @@ async function connectVolcDoubaoRealtime(session) {
   const engine = createEngine(session.rtcAppId);
   state.volcRtcEngine = engine;
   state.volcRtcRoom = session.roomId;
+  registerVolcRtcEventHandlers(engine, sdk, session);
 
   if (typeof engine.startAudioCapture === "function") {
     await engine.startAudioCapture();
@@ -385,6 +398,91 @@ async function connectVolcDoubaoRealtime(session) {
   }
   await engine.joinRoom(session.clientToken, session.roomId, { userId: session.userId }, roomConfig);
   logEvent("doubao:rtc", `joined room ${session.roomId}`);
+}
+
+function registerVolcRtcEventHandlers(engine, sdk, session) {
+  bindVolcRtcEvent(engine, sdk, "onUserJoined", (event) => {
+    logEvent("doubao:user_joined", extractVolcEventUserId(event) || "remote");
+  });
+  bindVolcRtcEvent(engine, sdk, "onUserLeave", (event) => {
+    logEvent("doubao:user_left", extractVolcEventUserId(event) || "remote");
+  });
+  bindVolcRtcEvent(engine, sdk, "onUserMessageReceived", (event) => {
+    handleVolcRtcMessage(event, session, "user_message");
+  });
+  bindVolcRtcEvent(engine, sdk, "onRoomMessageReceived", (event) => {
+    handleVolcRtcMessage(event, session, "room_message");
+  });
+  bindVolcRtcEvent(engine, sdk, "onSubtitleMessageReceived", (event) => {
+    handleVolcRtcMessage(event, session, "subtitle");
+  });
+  bindVolcRtcEvent(engine, sdk, "onRoomStateChanged", (event) => {
+    logEvent("doubao:room_state", stringifyCompact(event).slice(0, 120));
+  });
+  bindVolcRtcEvent(engine, sdk, "onConnectionStateChanged", (event) => {
+    logEvent("doubao:connection", stringifyCompact(event).slice(0, 120));
+  });
+}
+
+function bindVolcRtcEvent(engine, sdk, eventName, handler) {
+  if (typeof engine?.on !== "function") return;
+  const eventKey = sdk?.events?.[eventName] || sdk?.RTCEvents?.[eventName] || eventName;
+  try {
+    engine.on(eventKey, handler);
+  } catch (error) {
+    logEvent("doubao:event_bind_error", `${eventName}: ${error.message || "bind failed"}`);
+  }
+}
+
+function handleVolcRtcMessage(event, session, source) {
+  const payload = normalizeVolcMessagePayload(event);
+  const subtitle = extractVolcSubtitle(payload);
+  if (!subtitle.text) {
+    logEvent(`doubao:${source}`, stringifyCompact(payload).slice(0, 140));
+    return;
+  }
+  if (subtitle.definite === false) {
+    logEvent("doubao:subtitle_partial", subtitle.text.slice(0, 120));
+    return;
+  }
+  const speaker = subtitle.userId === session.userId ? "user" : "assistant";
+  addTurn(speaker, subtitle.text, `doubao_${source}`);
+}
+
+function normalizeVolcMessagePayload(event) {
+  const candidate = event?.message ?? event?.data ?? event?.detail ?? event?.payload ?? event;
+  if (typeof candidate === "string") {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return { text: candidate };
+    }
+  }
+  if (candidate instanceof ArrayBuffer) {
+    return { text: new TextDecoder().decode(candidate) };
+  }
+  return candidate || {};
+}
+
+function extractVolcSubtitle(payload) {
+  const data = payload?.data || payload?.Data || payload?.subtitle || payload?.Subtitle || payload;
+  return {
+    text: data?.text || data?.Text || data?.content || data?.Content || "",
+    userId: data?.userId || data?.UserId || data?.uid || data?.Uid || payload?.uid || "",
+    definite: data?.definite ?? data?.Definite ?? data?.isFinal ?? data?.IsFinal ?? true,
+  };
+}
+
+function extractVolcEventUserId(event) {
+  return event?.userInfo?.userId || event?.userId || event?.uid || event?.UserId || "";
+}
+
+function stringifyCompact(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value || "");
+  }
 }
 
 async function loadVolcRtcSdk(sdkUrl) {
@@ -466,6 +564,7 @@ function handleRealtimeEvent(event) {
 }
 
 async function endPractice() {
+  await stopRealtimeAgent();
   cleanupRealtime();
   state.sessionEndedAt = new Date().toISOString();
   logEvent("session:end", `turns=${state.turns.length}`);
@@ -486,6 +585,26 @@ async function endPractice() {
   logEvent("summary:ready", `score=${summary.overallScore}`);
   renderReport(summary);
   setStatus("report_ready");
+}
+
+async function stopRealtimeAgent() {
+  const session = state.lastRealtimeSetup;
+  if (session?.provider !== "volc_doubao" || !state.sessionId) return;
+  if (!session.roomId || !session.taskId) return;
+
+  try {
+    logEvent("doubao:stop_voice_chat", session.taskId);
+    const result = await apiJson(`/api/realtime/session/${state.sessionId}/stop`, {
+      method: "POST",
+      body: JSON.stringify({
+        roomId: session.roomId,
+        taskId: session.taskId,
+      }),
+    });
+    logEvent(result.ok ? "doubao:stop_done" : `doubao:stop_${result.status}`, result.requestId || result.message || "");
+  } catch (error) {
+    logEvent("doubao:stop_error", error.message || "StopVoiceChat failed");
+  }
 }
 
 function cleanupRealtime() {

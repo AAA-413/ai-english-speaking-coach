@@ -40,6 +40,18 @@ const realtimeSession = await request("/api/realtime/session", {
 });
 assert(realtimeSession.sessionId, "Realtime session response is missing sessionId");
 assert(["mock", "realtime", "volc_doubao_setup"].includes(realtimeSession.mode), "Realtime session mode is invalid");
+let realtimeStopped = false;
+if (realtimeSession.mode === "volc_doubao_setup" && realtimeSession.serverStarted) {
+  const stopResult = await request(`/api/realtime/session/${realtimeSession.sessionId}/stop`, {
+    method: "POST",
+    body: JSON.stringify({
+      roomId: realtimeSession.roomId,
+      taskId: realtimeSession.taskId,
+    }),
+  });
+  assert(stopResult.ok === true, "Volc Doubao StopVoiceChat did not succeed");
+  realtimeStopped = true;
+}
 
 const summary = await request("/api/sessions/smoke/summary", {
   method: "POST",
@@ -90,6 +102,7 @@ console.log(JSON.stringify({
   baseUrl,
   scenarios: scenarioResponse.scenarios.length,
   realtimeMode: realtimeSession.mode,
+  realtimeStopped,
   summaryScore: summary.overallScore,
   pronunciationScore: pronunciation.pronunciation,
   transcriptionSource: transcription.source,

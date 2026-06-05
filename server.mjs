@@ -15,6 +15,8 @@ import { transcribeAudio } from "./lib/openai-transcribe.mjs";
 import { createRealtimeClientSecret } from "./lib/realtime-session.mjs";
 import {
   createVolcDoubaoRealtimeSession,
+  startVolcDoubaoVoiceChat,
+  stopVolcDoubaoVoiceChat,
   volcDoubaoHealth,
 } from "./lib/volc-doubao-realtime.mjs";
 
@@ -140,12 +142,17 @@ async function handleApi(req, res, url) {
           correctionMode: body.correctionMode || "post_session",
           sessionId,
         });
+        const serverStart = await startVolcDoubaoVoiceChat({
+          session: volcSession,
+        });
 
         sendJson(res, 200, {
           mode: "volc_doubao_setup",
           provider,
           sessionId,
-          reason: "Volc Doubao O2.0 config is ready; frontend RTC SDK connection is the next integration step.",
+          reason: serverStart.ok
+            ? "Volc Doubao O2.0 StartVoiceChat started; browser should join the same RTC room."
+            : `Volc Doubao O2.0 config is ready; StartVoiceChat ${serverStart.status}.`,
           scenario,
           model: volcSession.model,
           rtcAppId: volcSession.rtcAppId,
@@ -154,9 +161,12 @@ async function handleApi(req, res, url) {
           sdkSource: volcSession.sdkSource,
           sdkVersion: volcSession.sdkVersion,
           roomId: volcSession.roomId,
+          taskId: volcSession.taskId,
           userId: volcSession.userId,
           agentUserId: volcSession.agentUserId,
           serverStartRequired: true,
+          serverStart,
+          serverStarted: Boolean(serverStart.ok),
           clientJoinReady: Boolean(volcSession.clientToken),
           s2sConfigPreview: redactVolcDoubaoPayload(volcSession.startVoiceChatPayload),
         });
@@ -211,6 +221,21 @@ async function handleApi(req, res, url) {
         scenario,
       });
     }
+    return;
+  }
+
+  const realtimeStopMatch = url.pathname.match(/^\/api\/realtime\/session\/([^/]+)\/stop$/);
+  if (req.method === "POST" && realtimeStopMatch) {
+    const body = await readJson(req);
+    const result = await stopVolcDoubaoVoiceChat({
+      roomId: body.roomId,
+      taskId: body.taskId,
+    });
+    sendJson(res, 200, {
+      provider: "volc_doubao",
+      sessionId: realtimeStopMatch[1],
+      ...result,
+    });
     return;
   }
 
