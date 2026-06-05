@@ -65,12 +65,17 @@ export VOLC_RTC_APP_ID="your_volc_rtc_app_id"
 export VOLC_RTC_APP_KEY="your_volc_rtc_app_key"
 export VOLC_RTC_TOKEN_TTL_SECONDS="86400"
 export VOLC_RTC_WEB_SDK_URL="https://lf-unpkg.volccdn.com/obj/vcloudfe/sdk/@volcengine/rtc/4.68.4/1778142355039/index.min.js"
+export VOLC_RTC_OPENAPI_HOST="rtc.volcengineapi.com"
+export VOLC_RTC_OPENAPI_REGION="cn-north-1"
+export VOLC_RTC_OPENAPI_VERSION="2024-12-01"
+export VOLCENGINE_ACCESS_KEY_ID="your_volcengine_ak"
+export VOLCENGINE_SECRET_ACCESS_KEY="your_volcengine_sk"
 export VOLC_DOUBAO_S2S_APP_ID="your_s2s_app_id"
 export VOLC_DOUBAO_S2S_TOKEN="your_s2s_token"
 node server.mjs
 ```
 
-`1.2.1.1` is the Doubao O2.0 end-to-end realtime speech model. The backend builds the StartVoiceChat configuration and redacts the S2S token from browser responses. When `VOLC_RTC_APP_KEY` is configured, the backend generates a room-scoped RTC client token for the session; `VOLC_RTC_CLIENT_TOKEN` remains available only as a temporary manual override. The browser loads the official `@volcengine/rtc` Web SDK CDN by default, then joins the room with auto-publish audio and auto-subscribe audio. `VOLC_RTC_WEB_SDK_URL` can still override the pinned official CDN if needed; otherwise the app keeps the mock conversation fallback so the demo remains complete.
+`1.2.1.1` is the Doubao O2.0 end-to-end realtime speech model. The backend builds the StartVoiceChat configuration, signs the Volc RTC OpenAPI request with server-side AK/SK, calls `StartVoiceChat`, and redacts the S2S token from browser responses. When `VOLC_RTC_APP_KEY` is configured, the backend generates a room-scoped RTC client token for the session; `VOLC_RTC_CLIENT_TOKEN` remains available only as a temporary manual override. The browser loads the official `@volcengine/rtc` Web SDK CDN by default, joins the same room with auto-publish audio and auto-subscribe audio, listens for subtitle/message callbacks, and calls the backend `StopVoiceChat` endpoint when the practice ends. `VOLC_RTC_WEB_SDK_URL` can still override the pinned official CDN if needed; otherwise the app keeps the mock conversation fallback so the demo remains complete.
 
 The post-session summary uses the text model when `OPENAI_API_KEY` is configured. Set `USE_MOCK_ANALYSIS=true` to force mock reports during demos.
 `POST /api/sessions/:id/transcribe` accepts `audioBase64` + `mimeType` and uses `OPENAI_TRANSCRIBE_MODEL` when a key is configured; otherwise it falls back to rough transcript/mock text.

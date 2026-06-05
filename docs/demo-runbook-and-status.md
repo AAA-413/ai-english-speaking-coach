@@ -31,7 +31,7 @@
 | 阶段 | 名称 | 状态 | 说明 |
 |---|---|---|---|
 | Phase 0 | 项目框架和契约 | 已完成 | 无依赖 Node 应用、场景数据、API contract、文档、mock fallback 都已具备。 |
-| Phase 1 | 实时对话链路 | 代码就绪，需真实 key QA | 已有 `POST /api/realtime/session`、WebRTC helper、事件日志、麦克风处理、mock fallback。最终演示前要用真实 OpenAI key 跑一次。 |
+| Phase 1 | 实时对话链路 | 豆包 Start/Stop 已打通，需浏览器真人语音 QA | 已有 `POST /api/realtime/session`、WebRTC helper、事件日志、麦克风处理、mock fallback。豆包 O2.0 已完成真实 `StartVoiceChat`/`StopVoiceChat` smoke；最终演示前要用浏览器麦克风真人跑一次。 |
 | Phase 2 | 稳定转写和课后总结 | 基本完成 | 已有 OpenAI summary provider、transcription endpoint、结构化报告 UI、mock fallback。还需要真实 key 下的转写/总结冒烟测试。 |
 | Phase 3 | scripted 跟读发音评测 | 基本完成 | 已有浏览器录音 payload、评分卡、Azure REST provider、provider 诊断、JSON export。还需要 Azure key + 兼容音频格式实测。 |
 | Phase 4 | 集成、QA、演示脚本 | 进行中 | API smoke、桌面浏览器 smoke、移动端 smoke、导出 JSON、麦克风拒绝 fallback 已测。剩余真实 key QA 和最终演示彩排。 |
@@ -47,6 +47,9 @@
 - Realtime transcript event 处理。
 - Realtime 失败时释放资源并 fallback。
 - 未配置 `OPENAI_API_KEY` 时自动进入 mock mode。
+- 豆包 O2.0 路线已接入火山 RTC OpenAPI 签名。
+- 豆包 O2.0 路线已真实调用 `StartVoiceChat`，结束时调用 `StopVoiceChat`。
+- 火山 RTC Web SDK 加房、自动发布麦克风、字幕/消息事件监听已接入。
 
 ### 路线 B：反馈、转写、发音
 
@@ -93,12 +96,12 @@
 
 ### 必须完成
 
-- 真实 OpenAI key QA：
-  - 配置 `OPENAI_API_KEY`
-  - 创建 Realtime session
+- 真实浏览器语音 QA：
+  - 确认 `REALTIME_PROVIDER=volc_doubao`
   - 浏览器授权麦克风
-  - 跑一小段真实语音对话
-  - 结束后生成 summary
+  - 跑一小段真实豆包语音对话
+  - 观察事件日志中的 RTC join、字幕/消息事件
+  - 结束后确认 `StopVoiceChat` 和 summary
 - 最终彩排：
   - mock mode 完整跑一次
   - 如果有 key，真实 provider 跑一次
@@ -137,6 +140,8 @@
 - [x] API smoke test 本地通过。
 - [x] 桌面浏览器 smoke test 本地通过。
 - [x] 390px 移动端 viewport QA 通过。
+- [x] 真实豆包 `StartVoiceChat`/`StopVoiceChat` smoke 测试。
+- [ ] 真实豆包浏览器麦克风对话测试。
 - [ ] 真实 OpenAI Realtime key 测试。
 - [ ] 真实 Azure pronunciation key 测试。
 - [ ] 最终两分钟彩排。
@@ -146,7 +151,8 @@
 2026-06-05 已通过：
 
 - `node --check public/app.js && node --check server.mjs && node scripts/smoke-test.mjs`
+- 豆包 O2.0 服务端真实 `StartVoiceChat` 成功，随后 `StopVoiceChat` 成功。
+- `node scripts/smoke-test.mjs` 会在豆包 session started 后自动 Stop，避免留下后台会话。
 - 桌面 Playwright smoke：开始练习、发送 mock turn、结束、发音评分、导出 JSON。
 - 移动端 Playwright smoke：`390x844` 视口，场景选择、练习、报告、发音评分可用，无横向溢出。
 - 麦克风拒绝 Playwright smoke：录音失败时自动 fallback 到无音频评分。
-
