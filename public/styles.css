@@ -202,7 +202,7 @@ input {
 
 .practice-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(260px, 1fr) auto auto;
+  grid-template-rows: auto auto auto minmax(260px, 1fr) auto auto auto;
   gap: 18px;
   padding: 28px;
 }
@@ -234,6 +234,38 @@ input {
   font-weight: 800;
   text-transform: uppercase;
   font-size: 12px;
+}
+
+.diagnostic-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr)) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8faf8;
+}
+
+.diagnostic-bar div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.diagnostic-bar span,
+.event-log-panel summary {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.diagnostic-bar strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
 }
 
 .goals-band {
@@ -372,6 +404,50 @@ li {
   gap: 10px;
 }
 
+.event-log-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.event-log-panel summary {
+  cursor: pointer;
+  padding: 12px 14px;
+}
+
+.event-log-list {
+  display: grid;
+  max-height: 160px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+}
+
+.event-log-row {
+  display: grid;
+  grid-template-columns: 92px minmax(120px, 180px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #edf0ed;
+  font-size: 13px;
+}
+
+.event-log-row:last-child {
+  border-bottom: 0;
+}
+
+.event-log-row time,
+.event-log-row span {
+  color: var(--muted);
+}
+
+.event-log-row strong,
+.event-log-row p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .report-panel {
   display: grid;
   gap: 18px;
@@ -494,6 +570,7 @@ li {
 
   .goals-band,
   .report-grid,
+  .diagnostic-bar,
   .pronunciation-panel {
     grid-template-columns: 1fr;
   }
@@ -504,6 +581,11 @@ li {
 
   .composer-row {
     grid-template-columns: 1fr;
+  }
+
+  .event-log-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 }
 

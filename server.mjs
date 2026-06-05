@@ -78,6 +78,9 @@ async function handleApi(req, res, url) {
       ok: true,
       demoMode: process.env.DEMO_MODE === "true",
       hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+      realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2",
+      transcribeModel: process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
+      realtimeVoice: process.env.OPENAI_REALTIME_VOICE || "marin",
     });
     return;
   }

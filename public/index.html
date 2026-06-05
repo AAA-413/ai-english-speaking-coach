@@ -61,6 +61,22 @@
           <div class="status-pill" id="statusPill">idle</div>
         </header>
 
+        <div class="diagnostic-bar">
+          <div>
+            <span>Mode</span>
+            <strong id="modeLabel">checking</strong>
+          </div>
+          <div>
+            <span>Session</span>
+            <strong id="sessionIdLabel">none</strong>
+          </div>
+          <div>
+            <span>Turns</span>
+            <strong id="turnCountLabel">0</strong>
+          </div>
+          <button id="exportSessionBtn" class="secondary-button" disabled>Export JSON</button>
+        </div>
+
         <div class="goals-band">
           <div>
             <h3>Goals</h3>
@@ -84,6 +100,11 @@
           <button id="sendMockBtn" class="secondary-button">Send Turn</button>
           <button id="endBtn" class="danger-button" disabled>End</button>
         </div>
+
+        <details class="event-log-panel">
+          <summary>Session events</summary>
+          <div id="eventLogList" class="event-log-list"></div>
+        </details>
 
         <section id="reportPanel" class="report-panel hidden">
           <div class="report-header">
