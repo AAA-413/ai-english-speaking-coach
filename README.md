@@ -50,10 +50,24 @@ To try the real Realtime path, copy `.env.example` to `.env` or export the varia
 
 ```bash
 export OPENAI_API_KEY="your_api_key"
+export REALTIME_PROVIDER="openai"
 export OPENAI_REALTIME_MODEL="gpt-realtime-2"
 export OPENAI_TEXT_MODEL="gpt-4.1-mini"
 node server.mjs
 ```
+
+To prepare the Doubao O2.0 realtime path, use:
+
+```bash
+export REALTIME_PROVIDER="volc_doubao"
+export VOLC_DOUBAO_MODEL="1.2.1.1"
+export VOLC_RTC_APP_ID="your_volc_rtc_app_id"
+export VOLC_DOUBAO_S2S_APP_ID="your_s2s_app_id"
+export VOLC_DOUBAO_S2S_TOKEN="your_s2s_token"
+node server.mjs
+```
+
+`1.2.1.1` is the Doubao O2.0 end-to-end realtime speech model. The backend now builds the StartVoiceChat configuration and redacts the S2S token from browser responses. The browser-side Volc RTC SDK connection is still the next integration step; until then, the app keeps the mock conversation fallback so the demo remains complete.
 
 The post-session summary uses the text model when `OPENAI_API_KEY` is configured. Set `USE_MOCK_ANALYSIS=true` to force mock reports during demos.
 `POST /api/sessions/:id/transcribe` accepts `audioBase64` + `mimeType` and uses `OPENAI_TRANSCRIBE_MODEL` when a key is configured; otherwise it falls back to rough transcript/mock text.
@@ -72,6 +86,7 @@ node scripts/smoke-test.mjs
 - [GStack dual-track phase plan](docs/gstack-dual-track-phase-plan.md)
 - [Route B AI handoff](docs/route-b-ai-handoff.md)
 - [Demo runbook and status](docs/demo-runbook-and-status.md)
+- [Volc Doubao realtime plan](docs/volc-doubao-realtime-plan.md)
 
 ## Collaboration
 

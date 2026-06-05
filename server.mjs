@@ -13,6 +13,10 @@ import { assessAzurePronunciation } from "./lib/azure-pronunciation.mjs";
 import { createSummary } from "./lib/openai-summary.mjs";
 import { transcribeAudio } from "./lib/openai-transcribe.mjs";
 import { createRealtimeClientSecret } from "./lib/realtime-session.mjs";
+import {
+  createVolcDoubaoRealtimeSession,
+  volcDoubaoHealth,
+} from "./lib/volc-doubao-realtime.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,10 +89,12 @@ async function handleApi(req, res, url) {
       transcribeModel: process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
       textModel: process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini",
       deepSeekTextModel: process.env.DEEPSEEK_TEXT_MODEL || "deepseek-v4-pro",
+      realtimeProvider: process.env.REALTIME_PROVIDER || "openai",
       realtimeVoice: process.env.OPENAI_REALTIME_VOICE || "marin",
       useMockAnalysis: shouldUseMockAnalysis(),
       hasDeepSeekKey: Boolean(process.env.DEEPSEEK_API_KEY),
       hasAzureSpeech: Boolean(process.env.AZURE_SPEECH_KEY && (process.env.AZURE_SPEECH_ENDPOINT || process.env.AZURE_SPEECH_REGION)),
+      volcDoubao: volcDoubaoHealth(),
     });
     return;
   }
@@ -102,10 +108,70 @@ async function handleApi(req, res, url) {
     const body = await readJson(req);
     const scenario = getScenario(body.scenarioId) || scenarios[0];
     const sessionId = body.sessionId || createSessionId();
+    const provider = body.provider || process.env.REALTIME_PROVIDER || "openai";
+
+    if (provider === "mock") {
+      sendJson(res, 200, {
+        mode: "mock",
+        provider,
+        sessionId,
+        reason: "Mock realtime provider selected",
+        scenario,
+      });
+      return;
+    }
+
+    if (provider === "volc_doubao") {
+      if (process.env.DEMO_MODE === "true") {
+        sendJson(res, 200, {
+          mode: "mock",
+          provider,
+          sessionId,
+          reason: "DEMO_MODE enabled",
+          scenario,
+        });
+        return;
+      }
+
+      try {
+        const volcSession = createVolcDoubaoRealtimeSession({
+          scenario,
+          level: body.level || scenario.level,
+          correctionMode: body.correctionMode || "post_session",
+          sessionId,
+        });
+
+        sendJson(res, 200, {
+          mode: "volc_doubao_setup",
+          provider,
+          sessionId,
+          reason: "Volc Doubao O2.0 config is ready; frontend RTC SDK connection is the next integration step.",
+          scenario,
+          model: volcSession.model,
+          rtcAppId: volcSession.rtcAppId,
+          roomId: volcSession.roomId,
+          userId: volcSession.userId,
+          agentUserId: volcSession.agentUserId,
+          serverStartRequired: true,
+          s2sConfigPreview: redactVolcDoubaoPayload(volcSession.startVoiceChatPayload),
+        });
+        return;
+      } catch (error) {
+        sendJson(res, 200, {
+          mode: "mock",
+          provider,
+          sessionId,
+          reason: error.message || "Volc Doubao realtime config is incomplete",
+          scenario,
+        });
+        return;
+      }
+    }
 
     if (process.env.DEMO_MODE === "true" || !process.env.OPENAI_API_KEY) {
       sendJson(res, 200, {
         mode: "mock",
+        provider,
         sessionId,
         reason: process.env.OPENAI_API_KEY ? "DEMO_MODE enabled" : "OPENAI_API_KEY is not configured",
         scenario,
@@ -124,6 +190,7 @@ async function handleApi(req, res, url) {
 
       sendJson(res, 200, {
         mode: "realtime",
+        provider,
         sessionId,
         model: result.model,
         clientSecret: result.clientSecret,
@@ -133,6 +200,7 @@ async function handleApi(req, res, url) {
     } catch (error) {
       sendJson(res, 200, {
         mode: "mock",
+        provider,
         sessionId,
         reason: error.message || "Realtime session creation failed",
         scenario,
@@ -253,6 +321,25 @@ async function handleApi(req, res, url) {
   }
 
   sendJson(res, 404, { error: "API route not found" });
+}
+
+function redactVolcDoubaoPayload(payload) {
+  return {
+    ...payload,
+    Config: {
+      ...payload.Config,
+      S2SConfig: {
+        ...payload.Config.S2SConfig,
+        ProviderParams: {
+          ...payload.Config.S2SConfig.ProviderParams,
+          app: {
+            ...payload.Config.S2SConfig.ProviderParams.app,
+            token: payload.Config.S2SConfig.ProviderParams.app.token ? "[redacted]" : "",
+          },
+        },
+      },
+    },
+  };
 }
 
 function shouldUseMockAnalysis() {

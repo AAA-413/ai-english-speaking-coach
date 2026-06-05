@@ -3,6 +3,7 @@ const state = {
   selectedScenarioId: "job_interview",
   level: "B1",
   correctionMode: "post_session",
+  realtimeProvider: "openai",
   voice: "marin",
   sessionId: null,
   mode: "idle",
@@ -21,6 +22,7 @@ const state = {
   lastSummary: null,
   pronunciationAudio: null,
   lastPronunciationResult: null,
+  lastRealtimeSetup: null,
 };
 
 const els = {
@@ -37,6 +39,7 @@ const els = {
   startBtn: document.querySelector("#startBtn"),
   endBtn: document.querySelector("#endBtn"),
   correctionMode: document.querySelector("#correctionMode"),
+  realtimeProvider: document.querySelector("#realtimeProvider"),
   voiceSelect: document.querySelector("#voiceSelect"),
   transcriptList: document.querySelector("#transcriptList"),
   mockInput: document.querySelector("#mockInput"),
@@ -93,8 +96,11 @@ function logEvent(type, detail = "") {
 
 function renderDiagnostics() {
   const modeParts = [state.sessionMode || "unknown"];
+  modeParts.push(state.realtimeProvider);
   if (state.health?.demoMode) modeParts.push("demo");
-  if (!state.health?.hasOpenAIKey) modeParts.push("no-key");
+  if (state.realtimeProvider === "openai" && !state.health?.hasOpenAIKey) modeParts.push("no-key");
+  if (state.realtimeProvider === "volc_doubao" && !state.health?.volcDoubao?.ready) modeParts.push("doubao-missing-config");
+  if (state.health?.hasDeepSeekKey) modeParts.push("deepseek");
   if (state.health?.hasAzureSpeech) modeParts.push("azure-speech");
   els.modeLabel.textContent = modeParts.join(" / ");
   els.sessionIdLabel.textContent = state.sessionId || "none";
@@ -221,7 +227,8 @@ async function startPractice() {
   state.sessionReason = "";
   state.sessionId = null;
   state.pronunciationText = scenario.pronunciationSentences[0];
-  logEvent("session:start", `${scenario.id} / ${state.level} / ${state.correctionMode}`);
+  state.lastRealtimeSetup = null;
+  logEvent("session:start", `${scenario.id} / ${state.level} / ${state.correctionMode} / ${state.realtimeProvider}`);
   renderTurns();
   setStatus("creating_session");
 
@@ -232,17 +239,23 @@ async function startPractice() {
         scenarioId: scenario.id,
         level: state.level,
         correctionMode: state.correctionMode,
+        provider: state.realtimeProvider,
         voice: state.voice,
       }),
     });
     state.sessionId = session.sessionId;
     state.sessionMode = session.mode;
     state.sessionReason = session.reason || "";
+    state.lastRealtimeSetup = session;
     logEvent("session:created", `${session.mode}${session.reason ? ` - ${session.reason}` : ""}`);
 
     if (session.mode === "realtime") {
       await connectRealtime(session.clientSecret);
       setStatus("connected");
+    } else if (session.mode === "volc_doubao_setup") {
+      setStatus("mock");
+      logEvent("doubao:setup", `${session.model} / room=${session.roomId}`);
+      addTurn("assistant", `${scenario.openingPrompt} (Doubao O2.0 config ready; RTC SDK connection pending.)`, "mock");
     } else {
       setStatus("mock");
       addTurn("assistant", scenario.openingPrompt, "mock");
@@ -522,6 +535,11 @@ function wireEvents() {
   els.correctionMode.addEventListener("change", (event) => {
     state.correctionMode = event.target.value;
   });
+  els.realtimeProvider.addEventListener("change", (event) => {
+    state.realtimeProvider = event.target.value;
+    state.sessionMode = realtimeReadinessLabel(state.health);
+    renderDiagnostics();
+  });
   els.voiceSelect.addEventListener("change", (event) => {
     state.voice = event.target.value;
   });
@@ -544,8 +562,10 @@ function wireEvents() {
 
 async function init() {
   state.health = await apiJson("/api/health");
-  state.sessionMode = state.health.hasOpenAIKey ? "realtime-ready" : "mock-ready";
-  logEvent("app:health", state.health.hasOpenAIKey ? state.health.realtimeModel : "mock mode");
+  state.realtimeProvider = state.health.realtimeProvider || "openai";
+  if (els.realtimeProvider) els.realtimeProvider.value = state.realtimeProvider;
+  state.sessionMode = realtimeReadinessLabel(state.health);
+  logEvent("app:health", `${state.sessionMode} / ${state.health.realtimeModel || state.health.volcDoubao?.model || "mock"}`);
   const data = await apiJson("/api/scenarios");
   state.scenarios = data.scenarios;
   state.selectedScenarioId = state.scenarios[0].id;
@@ -571,10 +591,23 @@ function buildSessionSnapshot() {
       scenarioTitle: scenario?.title,
       level: state.level,
       correctionMode: state.correctionMode,
+      realtimeProvider: state.realtimeProvider,
       voice: state.voice,
       realtimeModel: state.health?.realtimeModel,
+      volcDoubaoModel: state.health?.volcDoubao?.model,
       transcribeModel: state.health?.transcribeModel,
     },
+    realtimeSetup: state.lastRealtimeSetup ? {
+      mode: state.lastRealtimeSetup.mode,
+      provider: state.lastRealtimeSetup.provider,
+      reason: state.lastRealtimeSetup.reason,
+      model: state.lastRealtimeSetup.model,
+      rtcAppId: state.lastRealtimeSetup.rtcAppId,
+      roomId: state.lastRealtimeSetup.roomId,
+      userId: state.lastRealtimeSetup.userId,
+      agentUserId: state.lastRealtimeSetup.agentUserId,
+      serverStartRequired: state.lastRealtimeSetup.serverStartRequired,
+    } : null,
     turns: state.turns,
     summary: state.lastSummary,
     pronunciationText: state.pronunciationText,
@@ -587,6 +620,14 @@ function buildSessionSnapshot() {
     pronunciationResult: state.lastPronunciationResult,
     events: [...state.eventLog].reverse(),
   };
+}
+
+function realtimeReadinessLabel(health) {
+  if (state.realtimeProvider === "volc_doubao") {
+    return health.volcDoubao?.ready ? "doubao-ready" : "doubao-needs-config";
+  }
+  if (state.realtimeProvider === "mock") return "mock-ready";
+  return health.hasOpenAIKey ? "realtime-ready" : "mock-ready";
 }
 
 function exportSessionJson() {

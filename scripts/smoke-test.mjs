@@ -39,7 +39,7 @@ const realtimeSession = await request("/api/realtime/session", {
   }),
 });
 assert(realtimeSession.sessionId, "Realtime session response is missing sessionId");
-assert(["mock", "realtime"].includes(realtimeSession.mode), "Realtime session mode is invalid");
+assert(["mock", "realtime", "volc_doubao_setup"].includes(realtimeSession.mode), "Realtime session mode is invalid");
 
 const summary = await request("/api/sessions/smoke/summary", {
   method: "POST",
