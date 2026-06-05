@@ -482,3 +482,4 @@ git push -u origin feat/analysis-summary-pronunciation
 - scripted pronunciation 和 stable transcription 仍然是 mock/passthrough，等路线 B 继续接 Azure/Speechace/STT。
 - `POST /api/sessions/:id/transcribe` 已支持 `audioBase64` + `mimeType`，有 key 时会尝试 OpenAI audio transcription，没有 key 或失败时回落到 rough transcript/mock。
 - scripted pronunciation 录音已经会把浏览器音频传到后端。后端已接 Azure REST pronunciation provider；WAV PCM 或 OGG OPUS 且配置 `AZURE_SPEECH_KEY` + endpoint/region 时会尝试真实评测。浏览器 WebM 录音仍会 fallback 到 mock，后续可加转码或 Speech SDK。
+- 前端跟读评分卡现在展示 provider/source 和 fallback 原因，Export JSON 也包含最后一次 pronunciationResult，方便路线 B 调试。
