@@ -40,8 +40,10 @@ REALTIME_PROVIDER=volc_doubao
 
 VOLC_DOUBAO_MODEL=1.2.1.1
 VOLC_RTC_APP_ID=
+VOLC_RTC_APP_KEY=
 VOLC_RTC_CLIENT_TOKEN=
 VOLC_RTC_WEB_SDK_URL=
+VOLC_RTC_TOKEN_TTL_SECONDS=86400
 VOLC_RTC_ROOM_ID_PREFIX=english_coach
 VOLC_RTC_BUSINESS_ID=ai_english_speaking_coach
 VOLC_DOUBAO_S2S_APP_ID=
@@ -57,9 +59,11 @@ VOLC_DOUBAO_S2S_APP_ID=your_s2s_app_id
 还需要从火山控制台拿：
 
 - `VOLC_RTC_APP_ID`
-- `VOLC_RTC_CLIENT_TOKEN`
+- `VOLC_RTC_APP_KEY`
 - `VOLC_RTC_WEB_SDK_URL`，或在页面里预加载能提供 `window.VERTC` 的 SDK
 - `VOLC_DOUBAO_S2S_TOKEN`
+
+`VOLC_RTC_CLIENT_TOKEN` 不建议长期手填。现在代码会优先用 `VOLC_RTC_APP_ID + VOLC_RTC_APP_KEY + roomId + userId` 为每个 session 动态生成房间级 token；手填 `VOLC_RTC_CLIENT_TOKEN` 只作为临时覆盖。注意官方 RTC token 示例里的 RTC AppID 是 24 位，如果控制台拿到的是较短数字 ID，需要回到 RTC 应用管理页确认真正用于 SDK/token 的 AppID。
 
 ## 4. 还未完成
 
@@ -73,11 +77,13 @@ createEngine(appId)
 
 如果 SDK 或 token 缺失，会自动回到 mock conversation，不影响演示。
 
-仍然需要确认火山控制台生成 token 的方式，以及服务端正式调用 StartVoiceChat 的签名/鉴权。
+后端已经具备 RTC client token 生成能力；如果 `VOLC_RTC_APP_ID` 长度不符合官方 token 格式，`/api/health` 会在 `volcDoubao.tokenConfigInvalid` 中提示。
+
+仍然需要确认服务端正式调用 StartVoiceChat 的签名/鉴权。
 
 下一步需要：
 
-1. 从火山控制台或服务端生成用户加入 RTC 房间所需的 `VOLC_RTC_CLIENT_TOKEN`。
+1. 从火山控制台确认 24 位 RTC AppID，并填入 `VOLC_RTC_APP_KEY`。
 2. 填入 `VOLC_RTC_WEB_SDK_URL` 或改为正式 npm/Next.js SDK 集成。
 3. 后端服务端调用 `StartVoiceChat`。
 4. 用户和智能体在同一个房间实时语音对话。
