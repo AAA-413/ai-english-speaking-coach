@@ -20,6 +20,7 @@ const state = {
   eventLog: [],
   lastSummary: null,
   pronunciationAudio: null,
+  lastPronunciationResult: null,
 };
 
 const els = {
@@ -94,6 +95,7 @@ function renderDiagnostics() {
   const modeParts = [state.sessionMode || "unknown"];
   if (state.health?.demoMode) modeParts.push("demo");
   if (!state.health?.hasOpenAIKey) modeParts.push("no-key");
+  if (state.health?.hasAzureSpeech) modeParts.push("azure-speech");
   els.modeLabel.textContent = modeParts.join(" / ");
   els.sessionIdLabel.textContent = state.sessionId || "none";
   els.turnCountLabel.textContent = String(state.turns.filter((turn) => turn.speaker === "user").length);
@@ -381,6 +383,7 @@ function renderReport(summary) {
   state.pronunciationText = summary.recommendedPronunciationText || selectedScenario().pronunciationSentences[0];
   els.pronunciationText.textContent = state.pronunciationText;
   els.pronunciationResult.innerHTML = "";
+  state.lastPronunciationResult = null;
 }
 
 async function scorePronunciation() {
@@ -393,13 +396,22 @@ async function scorePronunciation() {
       audioBase64: state.pronunciationAudio?.base64,
       mimeType: state.pronunciationAudio?.mimeType,
       durationMs: state.pronunciationAudio?.durationMs,
+      language: "en-US",
     }),
   });
   renderPronunciationResult(result);
 }
 
 function renderPronunciationResult(result) {
-  logEvent("pronunciation:ready", `score=${result.pronunciation}${result.audioReceived ? " / audio" : ""}`);
+  state.lastPronunciationResult = result;
+  const weakWords = Array.isArray(result.weakWords) ? result.weakWords : [];
+  const provider = result.source || "unknown";
+  const providerDetail = result.providerError
+    ? `Fallback: ${result.providerError}`
+    : result.audioReceived
+      ? "Audio payload received by backend."
+      : "No audio payload sent; mock score only.";
+  logEvent("pronunciation:ready", `${provider} / score=${result.pronunciation}${result.audioReceived ? " / audio" : ""}`);
   els.pronunciationResult.innerHTML = `
     <div class="score-grid">
       ${["pronunciation", "accuracy", "fluency", "completeness", "prosody"].map((key) => `
@@ -407,12 +419,12 @@ function renderPronunciationResult(result) {
       `).join("")}
     </div>
     <div>
-      ${result.weakWords.map((item) => `
+      ${weakWords.map((item) => `
         <span class="weak-word">${escapeHtml(item.word)} ${item.score}: ${escapeHtml(item.tipZh)}</span>
       `).join("")}
     </div>
     <p>${escapeHtml(result.adviceZh)}</p>
-    <p class="audio-note">${result.audioReceived ? "Audio payload received by backend." : "No audio payload sent; mock score only."}</p>
+    <p class="audio-note">Provider: ${escapeHtml(provider)}. ${escapeHtml(providerDetail)}</p>
   `;
 }
 
@@ -428,7 +440,10 @@ async function recordPronunciation() {
   }
 
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const recorder = new MediaRecorder(stream);
+  const preferredMimeType = choosePronunciationMimeType();
+  const recorder = preferredMimeType
+    ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+    : new MediaRecorder(stream);
   state.mediaRecorder = recorder;
   const startedAt = performance.now();
   const chunks = [];
@@ -449,6 +464,16 @@ async function recordPronunciation() {
   recorder.start();
   logEvent("pronunciation:record", "started");
   els.recordPronunciationBtn.textContent = "Stop";
+}
+
+function choosePronunciationMimeType() {
+  if (typeof MediaRecorder.isTypeSupported !== "function") return "";
+  const candidates = [
+    "audio/ogg;codecs=opus",
+    "audio/webm;codecs=opus",
+    "audio/webm",
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
 }
 
 function wireEvents() {
@@ -526,6 +551,7 @@ function buildSessionSnapshot() {
       durationMs: state.pronunciationAudio.durationMs,
       recordedAt: state.pronunciationAudio.recordedAt,
     } : null,
+    pronunciationResult: state.lastPronunciationResult,
     events: [...state.eventLog].reverse(),
   };
 }
