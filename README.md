@@ -62,12 +62,14 @@ To prepare the Doubao O2.0 realtime path, use:
 export REALTIME_PROVIDER="volc_doubao"
 export VOLC_DOUBAO_MODEL="1.2.1.1"
 export VOLC_RTC_APP_ID="your_volc_rtc_app_id"
+export VOLC_RTC_CLIENT_TOKEN="your_volc_rtc_client_token"
+export VOLC_RTC_WEB_SDK_URL="your_volc_rtc_web_sdk_url"
 export VOLC_DOUBAO_S2S_APP_ID="your_s2s_app_id"
 export VOLC_DOUBAO_S2S_TOKEN="your_s2s_token"
 node server.mjs
 ```
 
-`1.2.1.1` is the Doubao O2.0 end-to-end realtime speech model. The backend now builds the StartVoiceChat configuration and redacts the S2S token from browser responses. The browser-side Volc RTC SDK connection is still the next integration step; until then, the app keeps the mock conversation fallback so the demo remains complete.
+`1.2.1.1` is the Doubao O2.0 end-to-end realtime speech model. The backend builds the StartVoiceChat configuration and redacts the S2S token from browser responses. The browser can attempt a Volc RTC Web SDK join when `VOLC_RTC_CLIENT_TOKEN` and either `VOLC_RTC_WEB_SDK_URL` or a preloaded `window.VERTC` SDK are available; otherwise the app keeps the mock conversation fallback so the demo remains complete.
 
 The post-session summary uses the text model when `OPENAI_API_KEY` is configured. Set `USE_MOCK_ANALYSIS=true` to force mock reports during demos.
 `POST /api/sessions/:id/transcribe` accepts `audioBase64` + `mimeType` and uses `OPENAI_TRANSCRIBE_MODEL` when a key is configured; otherwise it falls back to rough transcript/mock text.

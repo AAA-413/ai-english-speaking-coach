@@ -16,6 +16,8 @@ test("createVolcDoubaoRealtimeSession builds Doubao O2.0 StartVoiceChat config",
     sessionId: "sess_test",
     env: {
       VOLC_RTC_APP_ID: "rtc-app-id",
+      VOLC_RTC_CLIENT_TOKEN: "client-token",
+      VOLC_RTC_WEB_SDK_URL: "https://example.test/vertc.js",
       VOLC_DOUBAO_S2S_APP_ID: "test-s2s-app-id",
       VOLC_DOUBAO_S2S_TOKEN: "secret-token",
       VOLC_DOUBAO_MODEL: "1.2.1.1",
@@ -24,6 +26,8 @@ test("createVolcDoubaoRealtimeSession builds Doubao O2.0 StartVoiceChat config",
 
   assert.equal(session.provider, "volc_doubao");
   assert.equal(session.model, "1.2.1.1");
+  assert.equal(session.clientToken, "client-token");
+  assert.equal(session.sdkUrl, "https://example.test/vertc.js");
   assert.equal(session.startVoiceChatPayload.Config.S2SConfig.Provider, "volcano");
   assert.equal(
     session.startVoiceChatPayload.Config.S2SConfig.ProviderParams.dialog.extra.model,
@@ -47,5 +51,7 @@ test("volcDoubaoHealth reports missing realtime fields", () => {
 
   assert.equal(health.model, "1.2.1.1");
   assert.equal(health.ready, false);
+  assert.equal(health.clientReady, false);
   assert.deepEqual(health.missing, ["VOLC_RTC_APP_ID", "VOLC_DOUBAO_S2S_TOKEN"]);
+  assert.deepEqual(health.clientMissing, ["VOLC_RTC_CLIENT_TOKEN"]);
 });

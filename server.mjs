@@ -149,10 +149,13 @@ async function handleApi(req, res, url) {
           scenario,
           model: volcSession.model,
           rtcAppId: volcSession.rtcAppId,
+          clientToken: volcSession.clientToken,
+          sdkUrl: volcSession.sdkUrl,
           roomId: volcSession.roomId,
           userId: volcSession.userId,
           agentUserId: volcSession.agentUserId,
           serverStartRequired: true,
+          clientJoinReady: Boolean(volcSession.clientToken),
           s2sConfigPreview: redactVolcDoubaoPayload(volcSession.startVoiceChatPayload),
         });
         return;
