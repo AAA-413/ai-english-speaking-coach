@@ -23,6 +23,29 @@ http://localhost:3000
 Without `OPENAI_API_KEY`, the app automatically uses mock mode so the full demo flow still works.
 During a practice session, use **Export JSON** to download the current scenario, turns, summary, pronunciation text, and event log for Route B integration.
 
+## Parallel Next.js Shell
+
+This branch also includes a Next.js + TypeScript shell under `apps/web-next`. It is a parallel migration path and does not replace the current Node demo.
+
+```bash
+npm install --prefix apps/web-next
+npm run next:dev
+```
+
+Then open:
+
+```text
+http://localhost:3001
+```
+
+Useful checks:
+
+```bash
+npm run next:shell:smoke
+npm run next:typecheck
+npm run next:build
+```
+
 To try the real Realtime path, copy `.env.example` to `.env` or export the variables in your shell:
 
 ```bash

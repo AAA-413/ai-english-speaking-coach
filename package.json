@@ -7,7 +7,11 @@
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "check": "node --check server.mjs && node --check lib/scenarios.mjs && node --check lib/mock-analysis.mjs && node --check lib/openai-summary.mjs && node --check lib/openai-transcribe.mjs && node --check lib/azure-pronunciation.mjs && node --check lib/realtime-session.mjs && node --check public/app.js && node --check scripts/smoke-test.mjs",
-    "smoke": "node scripts/smoke-test.mjs"
+    "smoke": "node scripts/smoke-test.mjs",
+    "next:dev": "npm --prefix apps/web-next run dev -- --port 3001",
+    "next:typecheck": "npm --prefix apps/web-next run typecheck",
+    "next:build": "npm --prefix apps/web-next run build",
+    "next:shell:smoke": "node scripts/next-shell-smoke.mjs"
   },
   "engines": {
     "node": ">=20"
