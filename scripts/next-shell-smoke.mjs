@@ -63,8 +63,8 @@ const pageSource = readFileSync(
 );
 
 assert(
-  pageSource.includes("AI English Speaking Coach"),
-  "Next shell page must render the app name",
+  pageSource.includes("ScenarioPicker") && pageSource.includes("PracticeRoom"),
+  "Next shell page must render the practice experience",
 );
 
 console.log("Next.js shell smoke checks passed");

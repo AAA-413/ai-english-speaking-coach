@@ -12,7 +12,8 @@
     "next:dev": "npm --prefix apps/web-next run dev -- --port 3001",
     "next:typecheck": "npm --prefix apps/web-next run typecheck",
     "next:build": "npm --prefix apps/web-next run build",
-    "next:shell:smoke": "node scripts/next-shell-smoke.mjs"
+    "next:shell:smoke": "node scripts/next-shell-smoke.mjs",
+    "next:full:smoke": "node scripts/next-full-smoke.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -23,9 +23,11 @@ http://localhost:3000
 Without `OPENAI_API_KEY`, the app automatically uses mock mode so the full demo flow still works.
 During a practice session, use **Export JSON** to download the current scenario, turns, summary, pronunciation text, and event log for Route B integration.
 
-## Parallel Next.js Shell
+## Next.js TypeScript App
 
-This branch also includes a Next.js + TypeScript shell under `apps/web-next`. It is a parallel migration path and does not replace the current Node demo.
+The TypeScript refactor lives under `apps/web-next`. It now includes the main practice workspace, scenario controls, typed turns, post-session report, scripted pronunciation scoring, export JSON, and Next.js API route handlers for the same provider contracts.
+
+The dependency-free Node demo remains available on port `3000` as a stable fallback while the team reviews the Next.js path.
 
 ```bash
 npm install --prefix apps/web-next
@@ -41,6 +43,7 @@ http://localhost:3001
 Useful checks:
 
 ```bash
+npm run next:full:smoke
 npm run next:shell:smoke
 npm run next:typecheck
 npm run next:build

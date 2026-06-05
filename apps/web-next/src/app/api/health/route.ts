@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
+import { createHealthResponse } from "@/server/realtime";
 
 export function GET() {
-  return NextResponse.json({
-    ok: true,
-    app: "web-next",
-    mode: "parallel_migration",
-    contracts: ["scenarios", "turns", "summary", "transcription", "pronunciation"],
-  });
+  return NextResponse.json(createHealthResponse());
 }
