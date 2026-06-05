@@ -26,8 +26,11 @@ To try the real Realtime path, copy `.env.example` to `.env` or export the varia
 ```bash
 export OPENAI_API_KEY="your_api_key"
 export OPENAI_REALTIME_MODEL="gpt-realtime-2"
+export OPENAI_TEXT_MODEL="gpt-4.1-mini"
 node server.mjs
 ```
+
+The post-session summary uses the text model when `OPENAI_API_KEY` is configured. Set `USE_MOCK_ANALYSIS=true` to force mock reports during demos.
 
 In another terminal, run the API smoke test:
 

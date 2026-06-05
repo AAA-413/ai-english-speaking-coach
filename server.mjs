@@ -9,6 +9,7 @@ import {
   createMockSummary,
   mockTranscript,
 } from "./lib/mock-analysis.mjs";
+import { createOpenAISummary } from "./lib/openai-summary.mjs";
 import { createRealtimeClientSecret } from "./lib/realtime-session.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -80,7 +81,9 @@ async function handleApi(req, res, url) {
       hasOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
       realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2",
       transcribeModel: process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
+      textModel: process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini",
       realtimeVoice: process.env.OPENAI_REALTIME_VOICE || "marin",
+      useMockAnalysis: shouldUseMockAnalysis(),
     });
     return;
   }
@@ -137,11 +140,26 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && summaryMatch) {
     const body = await readJson(req);
     const scenario = getScenario(body.scenarioId) || scenarios[0];
-    sendJson(res, 200, createMockSummary({
+    const summaryInput = {
       sessionId: summaryMatch[1],
       scenario,
+      level: body.level || scenario.level,
       turns: Array.isArray(body.turns) ? body.turns : [],
-    }));
+    };
+
+    if (!shouldUseMockAnalysis()) {
+      try {
+        sendJson(res, 200, await createOpenAISummary(summaryInput));
+        return;
+      } catch (error) {
+        const summary = createMockSummary(summaryInput);
+        summary.providerError = error.message || "OpenAI summary failed";
+        sendJson(res, 200, summary);
+        return;
+      }
+    }
+
+    sendJson(res, 200, createMockSummary(summaryInput));
     return;
   }
 
@@ -168,6 +186,12 @@ async function handleApi(req, res, url) {
   }
 
   sendJson(res, 404, { error: "API route not found" });
+}
+
+function shouldUseMockAnalysis() {
+  return process.env.DEMO_MODE === "true"
+    || process.env.USE_MOCK_ANALYSIS === "true"
+    || !process.env.OPENAI_API_KEY;
 }
 
 async function serveStatic(req, res, url) {
