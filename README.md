@@ -6,6 +6,8 @@ AI English Speaking Coach is an AI-powered English speaking practice project. Th
 
 The first runnable shell is a dependency-free Node.js web app. It includes scenario selection, a practice room, a Realtime WebRTC session endpoint, OpenAI/mock post-session analysis, and Azure/mock scripted pronunciation scoring.
 
+Sprint status: the project is now in integration, QA, and demo polish. See [Demo runbook and status](docs/demo-runbook-and-status.md) for current phase, demo path, and remaining work.
+
 ## Run Locally
 
 ```bash
@@ -46,6 +48,7 @@ node scripts/smoke-test.mjs
 - [Team alignment voice MVP](docs/team-alignment-voice-mvp.md)
 - [GStack dual-track phase plan](docs/gstack-dual-track-phase-plan.md)
 - [Route B AI handoff](docs/route-b-ai-handoff.md)
+- [Demo runbook and status](docs/demo-runbook-and-status.md)
 
 ## Collaboration
 
