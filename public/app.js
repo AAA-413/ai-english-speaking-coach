@@ -12,6 +12,13 @@ const state = {
   localStream: null,
   mediaRecorder: null,
   pronunciationText: "",
+  health: null,
+  sessionStartedAt: null,
+  sessionEndedAt: null,
+  sessionMode: "unknown",
+  sessionReason: "",
+  eventLog: [],
+  lastSummary: null,
 };
 
 const els = {
@@ -19,6 +26,10 @@ const els = {
   sessionEyebrow: document.querySelector("#sessionEyebrow"),
   sessionTitle: document.querySelector("#sessionTitle"),
   statusPill: document.querySelector("#statusPill"),
+  modeLabel: document.querySelector("#modeLabel"),
+  sessionIdLabel: document.querySelector("#sessionIdLabel"),
+  turnCountLabel: document.querySelector("#turnCountLabel"),
+  exportSessionBtn: document.querySelector("#exportSessionBtn"),
   goalList: document.querySelector("#goalList"),
   keywordList: document.querySelector("#keywordList"),
   startBtn: document.querySelector("#startBtn"),
@@ -37,6 +48,7 @@ const els = {
   recordPronunciationBtn: document.querySelector("#recordPronunciationBtn"),
   mockPronunciationBtn: document.querySelector("#mockPronunciationBtn"),
   pronunciationResult: document.querySelector("#pronunciationResult"),
+  eventLogList: document.querySelector("#eventLogList"),
   remoteAudio: document.querySelector("#remoteAudio"),
   audioStrip: document.querySelector(".audio-strip"),
 };
@@ -63,6 +75,46 @@ function setStatus(status) {
   state.mode = status;
   els.statusPill.textContent = status.replaceAll("_", " ");
   els.audioStrip.classList.toggle("live", ["connected", "user_speaking", "ai_speaking", "mock"].includes(status));
+  renderDiagnostics();
+}
+
+function logEvent(type, detail = "") {
+  state.eventLog.unshift({
+    id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    at: new Date().toISOString(),
+    type,
+    detail,
+  });
+  state.eventLog = state.eventLog.slice(0, 80);
+  renderEventLog();
+}
+
+function renderDiagnostics() {
+  const modeParts = [state.sessionMode || "unknown"];
+  if (state.health?.demoMode) modeParts.push("demo");
+  if (!state.health?.hasOpenAIKey) modeParts.push("no-key");
+  els.modeLabel.textContent = modeParts.join(" / ");
+  els.sessionIdLabel.textContent = state.sessionId || "none";
+  els.turnCountLabel.textContent = String(state.turns.filter((turn) => turn.speaker === "user").length);
+  els.exportSessionBtn.disabled = !state.sessionId && state.turns.length === 0;
+}
+
+function renderEventLog() {
+  if (!state.eventLog.length) {
+    els.eventLogList.innerHTML = `<div class="event-log-row"><time>--</time><strong>idle</strong><p>No events yet</p></div>`;
+    return;
+  }
+
+  els.eventLogList.innerHTML = state.eventLog.map((event) => {
+    const time = new Date(event.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return `
+      <div class="event-log-row">
+        <time>${time}</time>
+        <strong>${escapeHtml(event.type)}</strong>
+        <p>${escapeHtml(event.detail || "")}</p>
+      </div>
+    `;
+  }).join("");
 }
 
 function renderScenarios() {
@@ -111,6 +163,8 @@ function renderAll() {
   renderScenarios();
   renderScenarioDetails();
   renderTurns();
+  renderDiagnostics();
+  renderEventLog();
 }
 
 function escapeHtml(value) {
@@ -129,8 +183,11 @@ function addTurn(speaker, transcript, source = "manual") {
     sequence: state.turns.length + 1,
     transcript: transcript.trim(),
     source,
+    createdAt: new Date().toISOString(),
   });
+  logEvent(`turn:${speaker}`, `${source}: ${transcript.trim().slice(0, 120)}`);
   renderTurns();
+  renderDiagnostics();
 }
 
 function mockAssistantReply(userText) {
@@ -153,7 +210,15 @@ async function startPractice() {
   els.startBtn.disabled = true;
   els.reportPanel.classList.add("hidden");
   state.turns = [];
+  state.eventLog = [];
+  state.lastSummary = null;
+  state.sessionStartedAt = new Date().toISOString();
+  state.sessionEndedAt = null;
+  state.sessionMode = "starting";
+  state.sessionReason = "";
+  state.sessionId = null;
   state.pronunciationText = scenario.pronunciationSentences[0];
+  logEvent("session:start", `${scenario.id} / ${state.level} / ${state.correctionMode}`);
   renderTurns();
   setStatus("creating_session");
 
@@ -168,6 +233,9 @@ async function startPractice() {
       }),
     });
     state.sessionId = session.sessionId;
+    state.sessionMode = session.mode;
+    state.sessionReason = session.reason || "";
+    logEvent("session:created", `${session.mode}${session.reason ? ` - ${session.reason}` : ""}`);
 
     if (session.mode === "realtime") {
       await connectRealtime(session.clientSecret);
@@ -179,6 +247,9 @@ async function startPractice() {
     els.endBtn.disabled = false;
   } catch (error) {
     console.error(error);
+    state.sessionMode = "mock";
+    state.sessionReason = error.message || "session failed";
+    logEvent("session:error", state.sessionReason);
     setStatus("mock");
     addTurn("assistant", scenario.openingPrompt, "mock");
     els.endBtn.disabled = false;
@@ -189,15 +260,18 @@ async function startPractice() {
 
 async function connectRealtime(clientSecret) {
   setStatus("requesting_microphone");
+  logEvent("webrtc:microphone", "requesting permission");
   const pc = new RTCPeerConnection();
   state.peerConnection = pc;
 
   pc.ontrack = (event) => {
     els.remoteAudio.srcObject = event.streams[0];
+    logEvent("webrtc:track", "remote audio track received");
     setStatus("ai_speaking");
   };
 
   pc.onconnectionstatechange = () => {
+    logEvent("webrtc:state", pc.connectionState);
     if (pc.connectionState === "connected") setStatus("connected");
     if (["failed", "disconnected", "closed"].includes(pc.connectionState)) setStatus(pc.connectionState);
   };
@@ -205,13 +279,17 @@ async function connectRealtime(clientSecret) {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   state.localStream = stream;
   pc.addTrack(stream.getTracks()[0], stream);
+  logEvent("webrtc:microphone", "permission granted");
 
   const dc = pc.createDataChannel("oai-events");
   state.dataChannel = dc;
+  dc.addEventListener("open", () => logEvent("realtime:data_channel", "open"));
+  dc.addEventListener("close", () => logEvent("realtime:data_channel", "closed"));
   dc.addEventListener("message", (event) => handleRealtimeEvent(JSON.parse(event.data)));
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+  logEvent("webrtc:sdp", "local offer created");
 
   const response = await fetch("https://api.openai.com/v1/realtime/calls", {
     method: "POST",
@@ -230,9 +308,11 @@ async function connectRealtime(clientSecret) {
     type: "answer",
     sdp: await response.text(),
   });
+  logEvent("webrtc:sdp", "remote answer applied");
 }
 
 function handleRealtimeEvent(event) {
+  logEvent("realtime:event", event.type);
   if (event.type === "conversation.item.input_audio_transcription.completed") {
     addTurn("user", event.transcript, "realtime_transcript");
     setStatus("connected");
@@ -247,6 +327,8 @@ function handleRealtimeEvent(event) {
 
 async function endPractice() {
   cleanupRealtime();
+  state.sessionEndedAt = new Date().toISOString();
+  logEvent("session:end", `turns=${state.turns.length}`);
   setStatus("report_generating");
   els.endBtn.disabled = true;
 
@@ -260,11 +342,14 @@ async function endPractice() {
     }),
   });
 
+  state.lastSummary = summary;
+  logEvent("summary:ready", `score=${summary.overallScore}`);
   renderReport(summary);
   setStatus("report_ready");
 }
 
 function cleanupRealtime() {
+  if (state.peerConnection || state.localStream) logEvent("webrtc:cleanup", "closing local media and peer connection");
   state.dataChannel?.close();
   state.peerConnection?.close();
   state.localStream?.getTracks().forEach((track) => track.stop());
@@ -298,6 +383,7 @@ function renderReport(summary) {
 }
 
 async function scorePronunciation() {
+  logEvent("pronunciation:score", state.pronunciationText || selectedScenario().pronunciationSentences[0]);
   const result = await apiJson("/api/pronunciation/scripted", {
     method: "POST",
     body: JSON.stringify({
@@ -309,6 +395,7 @@ async function scorePronunciation() {
 }
 
 function renderPronunciationResult(result) {
+  logEvent("pronunciation:ready", `score=${result.pronunciation}`);
   els.pronunciationResult.innerHTML = `
     <div class="score-grid">
       ${["pronunciation", "accuracy", "fluency", "completeness", "prosody"].map((key) => `
@@ -378,15 +465,61 @@ function wireEvents() {
   });
   els.mockPronunciationBtn.addEventListener("click", scorePronunciation);
   els.recordPronunciationBtn.addEventListener("click", recordPronunciation);
+  els.exportSessionBtn.addEventListener("click", exportSessionJson);
 }
 
 async function init() {
+  state.health = await apiJson("/api/health");
+  state.sessionMode = state.health.hasOpenAIKey ? "realtime-ready" : "mock-ready";
+  logEvent("app:health", state.health.hasOpenAIKey ? state.health.realtimeModel : "mock mode");
   const data = await apiJson("/api/scenarios");
   state.scenarios = data.scenarios;
   state.selectedScenarioId = state.scenarios[0].id;
   state.level = state.scenarios[0].level;
   wireEvents();
   renderAll();
+}
+
+function buildSessionSnapshot() {
+  const scenario = selectedScenario();
+  return {
+    exportedAt: new Date().toISOString(),
+    session: {
+      id: state.sessionId,
+      mode: state.sessionMode,
+      reason: state.sessionReason,
+      status: state.mode,
+      startedAt: state.sessionStartedAt,
+      endedAt: state.sessionEndedAt,
+    },
+    config: {
+      scenarioId: scenario?.id,
+      scenarioTitle: scenario?.title,
+      level: state.level,
+      correctionMode: state.correctionMode,
+      voice: state.voice,
+      realtimeModel: state.health?.realtimeModel,
+      transcribeModel: state.health?.transcribeModel,
+    },
+    turns: state.turns,
+    summary: state.lastSummary,
+    pronunciationText: state.pronunciationText,
+    events: [...state.eventLog].reverse(),
+  };
+}
+
+function exportSessionJson() {
+  const snapshot = buildSessionSnapshot();
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${snapshot.session.id || "practice-session"}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  logEvent("session:export", link.download);
 }
 
 init().catch((error) => {

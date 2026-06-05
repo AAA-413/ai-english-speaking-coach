@@ -19,6 +19,7 @@ http://localhost:3000
 ```
 
 Without `OPENAI_API_KEY`, the app automatically uses mock mode so the full demo flow still works.
+During a practice session, use **Export JSON** to download the current scenario, turns, summary, pronunciation text, and event log for Route B integration.
 
 To try the real Realtime path, copy `.env.example` to `.env` or export the variables in your shell:
 
