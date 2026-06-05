@@ -10,7 +10,7 @@ import {
   mockTranscript,
 } from "./lib/mock-analysis.mjs";
 import { assessAzurePronunciation } from "./lib/azure-pronunciation.mjs";
-import { createOpenAISummary } from "./lib/openai-summary.mjs";
+import { createSummary } from "./lib/openai-summary.mjs";
 import { transcribeAudio } from "./lib/openai-transcribe.mjs";
 import { createRealtimeClientSecret } from "./lib/realtime-session.mjs";
 
@@ -84,8 +84,10 @@ async function handleApi(req, res, url) {
       realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2",
       transcribeModel: process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
       textModel: process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini",
+      deepSeekTextModel: process.env.DEEPSEEK_TEXT_MODEL || "deepseek-v4-pro",
       realtimeVoice: process.env.OPENAI_REALTIME_VOICE || "marin",
       useMockAnalysis: shouldUseMockAnalysis(),
+      hasDeepSeekKey: Boolean(process.env.DEEPSEEK_API_KEY),
       hasAzureSpeech: Boolean(process.env.AZURE_SPEECH_KEY && (process.env.AZURE_SPEECH_ENDPOINT || process.env.AZURE_SPEECH_REGION)),
     });
     return;
@@ -152,7 +154,7 @@ async function handleApi(req, res, url) {
 
     if (!shouldUseMockAnalysis()) {
       try {
-        sendJson(res, 200, await createOpenAISummary(summaryInput));
+        sendJson(res, 200, await createSummary(summaryInput));
         return;
       } catch (error) {
         const summary = createMockSummary(summaryInput);
@@ -256,7 +258,7 @@ async function handleApi(req, res, url) {
 function shouldUseMockAnalysis() {
   return process.env.DEMO_MODE === "true"
     || process.env.USE_MOCK_ANALYSIS === "true"
-    || !process.env.OPENAI_API_KEY;
+    || !(process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY);
 }
 
 function shouldUseMockPronunciation() {
