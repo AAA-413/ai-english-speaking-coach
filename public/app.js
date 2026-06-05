@@ -11,6 +11,8 @@ const state = {
   peerConnection: null,
   dataChannel: null,
   localStream: null,
+  volcRtcEngine: null,
+  volcRtcRoom: null,
   mediaRecorder: null,
   pronunciationText: "",
   health: null,
@@ -253,9 +255,16 @@ async function startPractice() {
       await connectRealtime(session.clientSecret);
       setStatus("connected");
     } else if (session.mode === "volc_doubao_setup") {
-      setStatus("mock");
       logEvent("doubao:setup", `${session.model} / room=${session.roomId}`);
-      addTurn("assistant", `${scenario.openingPrompt} (Doubao O2.0 config ready; RTC SDK connection pending.)`, "mock");
+      try {
+        await connectVolcDoubaoRealtime(session);
+        setStatus("connected");
+        addTurn("assistant", `${scenario.openingPrompt} (Doubao O2.0 RTC room joined.)`, "mock");
+      } catch (error) {
+        setStatus("mock");
+        logEvent("doubao:fallback", error.message || "RTC SDK connection pending");
+        addTurn("assistant", `${scenario.openingPrompt} (Doubao O2.0 config ready; ${error.message || "RTC SDK connection pending"}.)`, "mock");
+      }
     } else {
       setStatus("mock");
       addTurn("assistant", scenario.openingPrompt, "mock");
@@ -334,6 +343,74 @@ async function connectRealtime(clientSecret) {
   logEvent("webrtc:sdp", "remote answer applied");
 }
 
+async function connectVolcDoubaoRealtime(session) {
+  if (!session.clientToken) {
+    throw new Error("missing VOLC_RTC_CLIENT_TOKEN");
+  }
+  if (!session.rtcAppId || !session.roomId || !session.userId) {
+    throw new Error("missing RTC join parameters");
+  }
+
+  setStatus("requesting_microphone");
+  logEvent("doubao:rtc", "requesting microphone permission");
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  state.localStream = stream;
+
+  const sdk = await loadVolcRtcSdk(session.sdkUrl);
+  const createEngine = sdk?.createEngine || sdk?.default?.createEngine;
+  if (typeof createEngine !== "function") {
+    throw new Error("Volc RTC SDK createEngine is unavailable");
+  }
+
+  const engine = createEngine(session.rtcAppId);
+  state.volcRtcEngine = engine;
+  state.volcRtcRoom = session.roomId;
+
+  if (typeof engine.startAudioCapture === "function") {
+    await engine.startAudioCapture();
+  }
+
+  if (typeof engine.joinRoom !== "function") {
+    throw new Error("Volc RTC SDK joinRoom is unavailable");
+  }
+
+  const roomConfig = {
+    isAutoPublish: true,
+    isAutoSubscribeAudio: true,
+    isAutoSubscribeVideo: false,
+  };
+  await engine.joinRoom(session.clientToken, session.roomId, { userId: session.userId }, roomConfig);
+  logEvent("doubao:rtc", `joined room ${session.roomId}`);
+}
+
+async function loadVolcRtcSdk(sdkUrl) {
+  if (window.VERTC) return window.VERTC;
+  if (!sdkUrl) throw new Error("missing VOLC_RTC_WEB_SDK_URL or window.VERTC");
+
+  await new Promise((resolve, reject) => {
+    const existing = Array.from(document.scripts).find((script) => script.src === sdkUrl);
+    if (existing) {
+      if (window.VERTC) {
+        resolve();
+        return;
+      }
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = sdkUrl;
+    script.async = true;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", () => reject(new Error("failed to load Volc RTC SDK")), { once: true });
+    document.head.append(script);
+  });
+
+  if (!window.VERTC) throw new Error("Volc RTC SDK did not register window.VERTC");
+  return window.VERTC;
+}
+
 function handleRealtimeEvent(event) {
   logEvent("realtime:event", event.type);
   if (event.type === "conversation.item.input_audio_transcription.completed") {
@@ -372,13 +449,24 @@ async function endPractice() {
 }
 
 function cleanupRealtime() {
-  if (state.peerConnection || state.localStream) logEvent("webrtc:cleanup", "closing local media and peer connection");
+  if (state.peerConnection || state.localStream || state.volcRtcEngine) {
+    logEvent("webrtc:cleanup", "closing local media and realtime connection");
+  }
   state.dataChannel?.close();
   state.peerConnection?.close();
+  try {
+    state.volcRtcEngine?.leaveRoom?.();
+    state.volcRtcEngine?.destroyEngine?.();
+    state.volcRtcEngine?.destroy?.();
+  } catch (error) {
+    logEvent("doubao:cleanup_error", error.message || "cleanup failed");
+  }
   state.localStream?.getTracks().forEach((track) => track.stop());
   state.dataChannel = null;
   state.peerConnection = null;
   state.localStream = null;
+  state.volcRtcEngine = null;
+  state.volcRtcRoom = null;
 }
 
 function renderReport(summary) {
@@ -607,6 +695,7 @@ function buildSessionSnapshot() {
       userId: state.lastRealtimeSetup.userId,
       agentUserId: state.lastRealtimeSetup.agentUserId,
       serverStartRequired: state.lastRealtimeSetup.serverStartRequired,
+      clientJoinReady: state.lastRealtimeSetup.clientJoinReady,
     } : null,
     turns: state.turns,
     summary: state.lastSummary,

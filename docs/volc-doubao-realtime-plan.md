@@ -40,6 +40,8 @@ REALTIME_PROVIDER=volc_doubao
 
 VOLC_DOUBAO_MODEL=1.2.1.1
 VOLC_RTC_APP_ID=
+VOLC_RTC_CLIENT_TOKEN=
+VOLC_RTC_WEB_SDK_URL=
 VOLC_RTC_ROOM_ID_PREFIX=english_coach
 VOLC_RTC_BUSINESS_ID=ai_english_speaking_coach
 VOLC_DOUBAO_S2S_APP_ID=
@@ -55,18 +57,30 @@ VOLC_DOUBAO_S2S_APP_ID=your_s2s_app_id
 还需要从火山控制台拿：
 
 - `VOLC_RTC_APP_ID`
+- `VOLC_RTC_CLIENT_TOKEN`
+- `VOLC_RTC_WEB_SDK_URL`，或在页面里预加载能提供 `window.VERTC` 的 SDK
 - `VOLC_DOUBAO_S2S_TOKEN`
 
 ## 4. 还未完成
 
-这次改造还没有接入火山 RTC Web SDK，所以它不是完整语音通路。
+这次改造已经有浏览器 RTC SDK adapter：如果 session 返回 `clientToken`，且前端能通过 `VOLC_RTC_WEB_SDK_URL` 或 `window.VERTC` 加载火山 RTC SDK，会尝试执行：
+
+```text
+createEngine(appId)
+  -> getUserMedia(audio)
+  -> joinRoom(clientToken, roomId, { userId }, roomConfig)
+```
+
+如果 SDK 或 token 缺失，会自动回到 mock conversation，不影响演示。
+
+仍然需要确认火山控制台生成 token 的方式，以及服务端正式调用 StartVoiceChat 的签名/鉴权。
 
 下一步需要：
 
-1. 前端引入火山 RTC Web SDK。
-2. 后端生成/下发用户加入 RTC 房间所需的 token。
+1. 从火山控制台或服务端生成用户加入 RTC 房间所需的 `VOLC_RTC_CLIENT_TOKEN`。
+2. 填入 `VOLC_RTC_WEB_SDK_URL` 或改为正式 npm/Next.js SDK 集成。
 3. 后端服务端调用 `StartVoiceChat`。
-4. 前端加入 `roomId`，用户和智能体在同一个房间实时语音对话。
+4. 用户和智能体在同一个房间实时语音对话。
 5. 结束时调用 `StopVoiceChat`。
 6. 把字幕/转写事件写入 `turns`，复用现有 summary 和 report。
 
