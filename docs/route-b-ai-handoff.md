@@ -472,3 +472,11 @@ git push -u origin feat/analysis-summary-pronunciation
 ```
 
 真实 provider 是增强项，mock fallback 是演示生命线。
+
+## 13. 当前代码状态
+
+截至 2026-06-05，`main` 已经包含基础的真实课后总结 provider：
+
+- 有 `OPENAI_API_KEY` 且 `USE_MOCK_ANALYSIS` 不是 `true` 时，`POST /api/sessions/:id/summary` 会调用 OpenAI Responses API 生成结构化 JSON。
+- 没有 key、开启 `DEMO_MODE`、开启 `USE_MOCK_ANALYSIS`，或 provider 失败时，会自动返回 mock summary。
+- scripted pronunciation 和 stable transcription 仍然是 mock/passthrough，等路线 B 继续接 Azure/Speechace/STT。
