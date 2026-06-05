@@ -64,7 +64,84 @@ test("createSummary uses DeepSeek V4 Pro when DeepSeek credentials are configure
 
   assert.equal(requestUrl, "https://api.deepseek.com/v1/chat/completions");
   assert.equal(requestBody.model, "deepseek-v4-pro");
-  assert.equal(requestBody.max_tokens, 4000);
+  assert.equal(requestBody.max_tokens, 8000);
   assert.equal(summary.source, "deepseek_v4");
   assert.equal(summary.overallScore, 82);
+});
+
+test("createSummary retries DeepSeek when first response has empty content", async () => {
+  const requestBodies = [];
+  const fakeFetch = async (_url, options) => {
+    requestBodies.push(JSON.parse(options.body));
+    if (requestBodies.length === 1) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: {
+              content: "",
+              reasoning_content: "The model reasoned but did not emit JSON content.",
+            },
+          }],
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              overallScore: 84,
+              scores: {
+                pronunciation: 78,
+                fluency: 80,
+                grammar: 82,
+                vocabulary: 79,
+                interaction: 85,
+              },
+              goalCompletion: ["Answered the interview prompt"],
+              corrections: [{
+                type: "expression",
+                severity: "low",
+                original: "I want improve my communication.",
+                corrected: "I want to improve my communication.",
+                explanationZh: "want 后面接 to do。",
+                betterExpression: "I am working on communicating more clearly.",
+              }],
+              betterExpressions: ["I am working on communicating more clearly."],
+              pronunciationFocus: "Focus on sentence stress.",
+              practiceTasks: ["Repeat the corrected answer twice."],
+              recommendedPronunciationText: "I want to improve my communication.",
+            }),
+          },
+        }],
+      }),
+    };
+  };
+
+  const summary = await createSummary({
+    sessionId: "sess_deepseek_retry",
+    scenario,
+    level: "B1",
+    turns: [{
+      speaker: "user",
+      sequence: 1,
+      transcript: "I want improve my communication.",
+    }],
+    env: {
+      DEEPSEEK_API_KEY: "test-key",
+      DEEPSEEK_BASE_URL: "https://api.deepseek.com",
+      DEEPSEEK_TEXT_MODEL: "deepseek-v4-pro",
+    },
+    fetchImpl: fakeFetch,
+  });
+
+  assert.equal(requestBodies.length, 2);
+  assert.equal(requestBodies[0].max_tokens, 8000);
+  assert.equal(requestBodies[1].max_tokens, 12000);
+  assert.equal(requestBodies[1].temperature, 0);
+  assert.equal(summary.source, "deepseek_v4");
+  assert.equal(summary.overallScore, 84);
 });
