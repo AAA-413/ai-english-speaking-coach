@@ -19,6 +19,7 @@ const state = {
   sessionReason: "",
   eventLog: [],
   lastSummary: null,
+  pronunciationAudio: null,
 };
 
 const els = {
@@ -389,13 +390,16 @@ async function scorePronunciation() {
     body: JSON.stringify({
       scenarioId: selectedScenario().id,
       referenceText: state.pronunciationText || selectedScenario().pronunciationSentences[0],
+      audioBase64: state.pronunciationAudio?.base64,
+      mimeType: state.pronunciationAudio?.mimeType,
+      durationMs: state.pronunciationAudio?.durationMs,
     }),
   });
   renderPronunciationResult(result);
 }
 
 function renderPronunciationResult(result) {
-  logEvent("pronunciation:ready", `score=${result.pronunciation}`);
+  logEvent("pronunciation:ready", `score=${result.pronunciation}${result.audioReceived ? " / audio" : ""}`);
   els.pronunciationResult.innerHTML = `
     <div class="score-grid">
       ${["pronunciation", "accuracy", "fluency", "completeness", "prosody"].map((key) => `
@@ -408,6 +412,7 @@ function renderPronunciationResult(result) {
       `).join("")}
     </div>
     <p>${escapeHtml(result.adviceZh)}</p>
+    <p class="audio-note">${result.audioReceived ? "Audio payload received by backend." : "No audio payload sent; mock score only."}</p>
   `;
 }
 
@@ -425,13 +430,24 @@ async function recordPronunciation() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const recorder = new MediaRecorder(stream);
   state.mediaRecorder = recorder;
+  const startedAt = performance.now();
   const chunks = [];
   recorder.addEventListener("dataavailable", (event) => chunks.push(event.data));
   recorder.addEventListener("stop", async () => {
     stream.getTracks().forEach((track) => track.stop());
+    const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+    state.pronunciationAudio = {
+      base64: await blobToBase64(blob),
+      mimeType: blob.type || "audio/webm",
+      sizeBytes: blob.size,
+      durationMs: Math.round(performance.now() - startedAt),
+      recordedAt: new Date().toISOString(),
+    };
+    logEvent("pronunciation:recorded", `${state.pronunciationAudio.mimeType} / ${state.pronunciationAudio.sizeBytes} bytes`);
     await scorePronunciation();
   });
   recorder.start();
+  logEvent("pronunciation:record", "started");
   els.recordPronunciationBtn.textContent = "Stop";
 }
 
@@ -504,6 +520,12 @@ function buildSessionSnapshot() {
     turns: state.turns,
     summary: state.lastSummary,
     pronunciationText: state.pronunciationText,
+    pronunciationAudio: state.pronunciationAudio ? {
+      mimeType: state.pronunciationAudio.mimeType,
+      sizeBytes: state.pronunciationAudio.sizeBytes,
+      durationMs: state.pronunciationAudio.durationMs,
+      recordedAt: state.pronunciationAudio.recordedAt,
+    } : null,
     events: [...state.eventLog].reverse(),
   };
 }
@@ -520,6 +542,18 @@ function exportSessionJson() {
   link.remove();
   URL.revokeObjectURL(url);
   logEvent("session:export", link.download);
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("loadend", () => {
+      const result = String(reader.result || "");
+      resolve(result.includes(",") ? result.split(",")[1] : result);
+    });
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(blob);
+  });
 }
 
 init().catch((error) => {
