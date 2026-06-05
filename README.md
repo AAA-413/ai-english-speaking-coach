@@ -11,6 +11,7 @@ This repository is being initialized from the product design draft. Implementati
 - [Design draft](docs/ai-english-speaking-coach-design.md)
 - [Team alignment voice MVP](docs/team-alignment-voice-mvp.md)
 - [GStack dual-track phase plan](docs/gstack-dual-track-phase-plan.md)
+- [Route B AI handoff](docs/route-b-ai-handoff.md)
 
 ## Collaboration
 
