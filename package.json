@@ -1,0 +1,14 @@
+{
+  "name": "ai-english-speaking-coach",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && node --check lib/scenarios.mjs && node --check lib/mock-analysis.mjs && node --check lib/realtime-session.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
