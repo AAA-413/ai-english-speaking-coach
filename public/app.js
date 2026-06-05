@@ -250,6 +250,7 @@ async function startPractice() {
     els.endBtn.disabled = false;
   } catch (error) {
     console.error(error);
+    cleanupRealtime();
     state.sessionMode = "mock";
     state.sessionReason = error.message || "session failed";
     logEvent("session:error", state.sessionReason);
@@ -288,7 +289,13 @@ async function connectRealtime(clientSecret) {
   state.dataChannel = dc;
   dc.addEventListener("open", () => logEvent("realtime:data_channel", "open"));
   dc.addEventListener("close", () => logEvent("realtime:data_channel", "closed"));
-  dc.addEventListener("message", (event) => handleRealtimeEvent(JSON.parse(event.data)));
+  dc.addEventListener("message", (event) => {
+    try {
+      handleRealtimeEvent(JSON.parse(event.data));
+    } catch (error) {
+      logEvent("realtime:event_error", error.message || "Unable to parse event");
+    }
+  });
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -388,18 +395,23 @@ function renderReport(summary) {
 
 async function scorePronunciation() {
   logEvent("pronunciation:score", state.pronunciationText || selectedScenario().pronunciationSentences[0]);
-  const result = await apiJson("/api/pronunciation/scripted", {
-    method: "POST",
-    body: JSON.stringify({
-      scenarioId: selectedScenario().id,
-      referenceText: state.pronunciationText || selectedScenario().pronunciationSentences[0],
-      audioBase64: state.pronunciationAudio?.base64,
-      mimeType: state.pronunciationAudio?.mimeType,
-      durationMs: state.pronunciationAudio?.durationMs,
-      language: "en-US",
-    }),
-  });
-  renderPronunciationResult(result);
+  try {
+    const result = await apiJson("/api/pronunciation/scripted", {
+      method: "POST",
+      body: JSON.stringify({
+        scenarioId: selectedScenario().id,
+        referenceText: state.pronunciationText || selectedScenario().pronunciationSentences[0],
+        audioBase64: state.pronunciationAudio?.base64,
+        mimeType: state.pronunciationAudio?.mimeType,
+        durationMs: state.pronunciationAudio?.durationMs,
+        language: "en-US",
+      }),
+    });
+    renderPronunciationResult(result);
+  } catch (error) {
+    logEvent("pronunciation:error", error.message || "scoring failed");
+    els.pronunciationResult.innerHTML = `<p class="audio-note">Scoring failed: ${escapeHtml(error.message || "Please try again.")}</p>`;
+  }
 }
 
 function renderPronunciationResult(result) {
@@ -439,16 +451,37 @@ async function recordPronunciation() {
     return;
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  state.pronunciationAudio = null;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (error) {
+    logEvent("pronunciation:error", error.message || "microphone unavailable");
+    await scorePronunciation();
+    return;
+  }
+
   const preferredMimeType = choosePronunciationMimeType();
-  const recorder = preferredMimeType
-    ? new MediaRecorder(stream, { mimeType: preferredMimeType })
-    : new MediaRecorder(stream);
+  let recorder;
+  try {
+    recorder = preferredMimeType
+      ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+      : new MediaRecorder(stream);
+  } catch (error) {
+    stream.getTracks().forEach((track) => track.stop());
+    logEvent("pronunciation:error", error.message || "recording unavailable");
+    await scorePronunciation();
+    return;
+  }
+
   state.mediaRecorder = recorder;
   const startedAt = performance.now();
   const chunks = [];
-  recorder.addEventListener("dataavailable", (event) => chunks.push(event.data));
+  recorder.addEventListener("dataavailable", (event) => {
+    if (event.data?.size) chunks.push(event.data);
+  });
   recorder.addEventListener("stop", async () => {
+    state.mediaRecorder = null;
     stream.getTracks().forEach((track) => track.stop());
     const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
     state.pronunciationAudio = {
