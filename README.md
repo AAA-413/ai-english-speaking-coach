@@ -32,7 +32,7 @@ node server.mjs
 
 The post-session summary uses the text model when `OPENAI_API_KEY` is configured. Set `USE_MOCK_ANALYSIS=true` to force mock reports during demos.
 `POST /api/sessions/:id/transcribe` accepts `audioBase64` + `mimeType` and uses `OPENAI_TRANSCRIBE_MODEL` when a key is configured; otherwise it falls back to rough transcript/mock text.
-The scripted pronunciation recorder now sends captured browser audio to the backend, while scoring still uses mock feedback until a pronunciation provider is connected.
+The scripted pronunciation recorder sends captured browser audio to the backend. If `AZURE_SPEECH_KEY` plus `AZURE_SPEECH_ENDPOINT` or `AZURE_SPEECH_REGION` are configured, the backend attempts Azure Pronunciation Assessment for WAV/OGG audio; browser WebM recordings still fall back to mock feedback unless converted.
 
 In another terminal, run the API smoke test:
 

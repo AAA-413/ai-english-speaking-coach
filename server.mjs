@@ -9,6 +9,7 @@ import {
   createMockSummary,
   mockTranscript,
 } from "./lib/mock-analysis.mjs";
+import { assessAzurePronunciation } from "./lib/azure-pronunciation.mjs";
 import { createOpenAISummary } from "./lib/openai-summary.mjs";
 import { transcribeAudio } from "./lib/openai-transcribe.mjs";
 import { createRealtimeClientSecret } from "./lib/realtime-session.mjs";
@@ -85,6 +86,7 @@ async function handleApi(req, res, url) {
       textModel: process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini",
       realtimeVoice: process.env.OPENAI_REALTIME_VOICE || "marin",
       useMockAnalysis: shouldUseMockAnalysis(),
+      hasAzureSpeech: Boolean(process.env.AZURE_SPEECH_KEY && (process.env.AZURE_SPEECH_ENDPOINT || process.env.AZURE_SPEECH_REGION)),
     });
     return;
   }
@@ -206,6 +208,37 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/pronunciation/scripted") {
     const body = await readJson(req);
+    if (!shouldUseMockPronunciation() && body.audioBase64) {
+      try {
+        sendJson(res, 200, {
+          scenarioId: body.scenarioId,
+          referenceText: body.referenceText,
+          audioReceived: true,
+          mimeType: body.mimeType || null,
+          durationMs: body.durationMs || null,
+          ...(await assessAzurePronunciation({
+            referenceText: body.referenceText,
+            audioBase64: body.audioBase64,
+            mimeType: body.mimeType,
+            durationMs: body.durationMs,
+            language: body.language || "en-US",
+          })),
+        });
+        return;
+      } catch (error) {
+        const assessment = createMockPronunciationAssessment({
+          referenceText: body.referenceText,
+          scenarioId: body.scenarioId,
+        });
+        assessment.audioReceived = true;
+        assessment.mimeType = body.mimeType || null;
+        assessment.durationMs = body.durationMs || null;
+        assessment.providerError = error.message || "Azure pronunciation failed";
+        sendJson(res, 200, assessment);
+        return;
+      }
+    }
+
     const assessment = createMockPronunciationAssessment({
       referenceText: body.referenceText,
       scenarioId: body.scenarioId,
@@ -224,6 +257,13 @@ function shouldUseMockAnalysis() {
   return process.env.DEMO_MODE === "true"
     || process.env.USE_MOCK_ANALYSIS === "true"
     || !process.env.OPENAI_API_KEY;
+}
+
+function shouldUseMockPronunciation() {
+  return process.env.DEMO_MODE === "true"
+    || process.env.USE_MOCK_PRONUNCIATION === "true"
+    || !process.env.AZURE_SPEECH_KEY
+    || !(process.env.AZURE_SPEECH_ENDPOINT || process.env.AZURE_SPEECH_REGION);
 }
 
 async function serveStatic(req, res, url) {
