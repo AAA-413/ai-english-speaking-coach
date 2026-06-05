@@ -4,7 +4,35 @@ AI English Speaking Coach is an AI-powered English speaking practice project. Th
 
 ## Current Status
 
-This repository is being initialized from the product design draft. Implementation has not started yet.
+The first runnable shell is a dependency-free Node.js web app. It includes scenario selection, a practice room, a Realtime WebRTC session endpoint, mock post-session analysis, and mock scripted pronunciation scoring.
+
+## Run Locally
+
+```bash
+node server.mjs
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
+
+Without `OPENAI_API_KEY`, the app automatically uses mock mode so the full demo flow still works.
+
+To try the real Realtime path, copy `.env.example` to `.env` or export the variables in your shell:
+
+```bash
+export OPENAI_API_KEY="your_api_key"
+export OPENAI_REALTIME_MODEL="gpt-realtime-2"
+node server.mjs
+```
+
+In another terminal, run the API smoke test:
+
+```bash
+node scripts/smoke-test.mjs
+```
 
 ## Docs
 

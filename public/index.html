@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI English Speaking Coach</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="setup-panel" aria-label="Practice setup">
+        <div class="brand-row">
+          <div class="brand-mark">AI</div>
+          <div>
+            <h1>English Speaking Coach</h1>
+            <p>Scenario practice</p>
+          </div>
+        </div>
+
+        <section class="control-group">
+          <h2>Scenario</h2>
+          <div id="scenarioList" class="scenario-list"></div>
+        </section>
+
+        <section class="control-group">
+          <h2>Level</h2>
+          <div class="segmented" role="group" aria-label="Level">
+            <button class="segment active" data-level="A2">A2</button>
+            <button class="segment" data-level="B1">B1</button>
+            <button class="segment" data-level="B2">B2</button>
+          </div>
+        </section>
+
+        <section class="control-group">
+          <h2>Correction</h2>
+          <select id="correctionMode">
+            <option value="post_session">Post-session</option>
+            <option value="coach">Coach</option>
+            <option value="immersive">Immersive</option>
+          </select>
+        </section>
+
+        <section class="control-group">
+          <h2>Voice</h2>
+          <select id="voiceSelect">
+            <option value="marin">Marin</option>
+            <option value="alloy">Alloy</option>
+            <option value="verse">Verse</option>
+          </select>
+        </section>
+
+        <button id="startBtn" class="primary-button">Start Practice</button>
+      </aside>
+
+      <section class="practice-panel">
+        <header class="practice-header">
+          <div>
+            <p id="sessionEyebrow" class="eyebrow">Not started</p>
+            <h2 id="sessionTitle">Choose a scenario</h2>
+          </div>
+          <div class="status-pill" id="statusPill">idle</div>
+        </header>
+
+        <div class="goals-band">
+          <div>
+            <h3>Goals</h3>
+            <ul id="goalList"></ul>
+          </div>
+          <div>
+            <h3>Keywords</h3>
+            <div id="keywordList" class="keyword-list"></div>
+          </div>
+        </div>
+
+        <div class="conversation-surface">
+          <div class="audio-strip" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div id="transcriptList" class="transcript-list"></div>
+        </div>
+
+        <div class="composer-row">
+          <input id="mockInput" type="text" placeholder="Type a mock learner turn while Realtime is not connected">
+          <button id="sendMockBtn" class="secondary-button">Send Turn</button>
+          <button id="endBtn" class="danger-button" disabled>End</button>
+        </div>
+
+        <section id="reportPanel" class="report-panel hidden">
+          <div class="report-header">
+            <div>
+              <p class="eyebrow">Post-session report</p>
+              <h2>Practice summary</h2>
+            </div>
+            <div id="overallScore" class="score-dial">--</div>
+          </div>
+          <div id="scoreGrid" class="score-grid"></div>
+          <div class="report-grid">
+            <section>
+              <h3>Corrections</h3>
+              <div id="correctionList"></div>
+            </section>
+            <section>
+              <h3>Next Practice</h3>
+              <ul id="practiceList"></ul>
+            </section>
+          </div>
+          <section class="pronunciation-panel">
+            <div>
+              <p class="eyebrow">Scripted pronunciation</p>
+              <h3 id="pronunciationText">Recommended sentence</h3>
+            </div>
+            <div class="pronunciation-actions">
+              <button id="recordPronunciationBtn" class="secondary-button">Record</button>
+              <button id="mockPronunciationBtn" class="secondary-button">Score</button>
+            </div>
+            <div id="pronunciationResult" class="pronunciation-result"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <audio id="remoteAudio" autoplay></audio>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
