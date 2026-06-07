@@ -1,30 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AI English Speaking Coach</title>
+    <title>AI 英语口语教练</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
     <main class="app-shell">
-      <aside class="setup-panel" aria-label="Practice setup">
+      <aside class="setup-panel" aria-label="练习设置">
         <div class="brand-row">
           <div class="brand-mark">AI</div>
           <div>
-            <h1>English Speaking Coach</h1>
-            <p>Scenario practice</p>
+            <h1>AI 英语口语教练</h1>
+            <p>真实场景口语训练</p>
           </div>
         </div>
 
         <section class="control-group">
-          <h2>Scenario</h2>
+          <h2>练习场景</h2>
           <div id="scenarioList" class="scenario-list"></div>
         </section>
 
         <section class="control-group">
-          <h2>Level</h2>
-          <div class="segmented" role="group" aria-label="Level">
+          <h2>水平</h2>
+          <div class="segmented" role="group" aria-label="水平">
             <button class="segment active" data-level="A2">A2</button>
             <button class="segment" data-level="B1">B1</button>
             <button class="segment" data-level="B2">B2</button>
@@ -32,25 +32,26 @@
         </section>
 
         <section class="control-group">
-          <h2>Correction</h2>
+          <h2>纠错时机</h2>
           <select id="correctionMode">
-            <option value="post_session">Post-session</option>
-            <option value="coach">Coach</option>
-            <option value="immersive">Immersive</option>
+            <option value="post_session">课后总结纠错</option>
+            <option value="coach">教练式即时纠错</option>
+            <option value="immersive">沉浸对话优先</option>
           </select>
         </section>
 
         <section class="control-group">
-          <h2>Realtime</h2>
+          <h2>实时语音</h2>
           <select id="realtimeProvider">
-            <option value="openai">OpenAI Realtime</option>
-            <option value="volc_doubao">Doubao O2.0</option>
-            <option value="mock">Mock</option>
+            <option value="browser_voice">稳定实时语音（推荐）</option>
+            <option value="openai">OpenAI 实时语音</option>
+            <option value="volc_doubao">豆包 O2.0</option>
+            <option value="mock">演示兜底模式</option>
           </select>
         </section>
 
         <section class="control-group">
-          <h2>Voice</h2>
+          <h2>声音</h2>
           <select id="voiceSelect">
             <option value="marin">Marin</option>
             <option value="alloy">Alloy</option>
@@ -58,41 +59,41 @@
           </select>
         </section>
 
-        <button id="startBtn" class="primary-button">Start Practice</button>
+        <button id="startBtn" class="primary-button">开始练习</button>
       </aside>
 
       <section class="practice-panel">
         <header class="practice-header">
           <div>
-            <p id="sessionEyebrow" class="eyebrow">Not started</p>
-            <h2 id="sessionTitle">Choose a scenario</h2>
+            <p id="sessionEyebrow" class="eyebrow">尚未开始</p>
+            <h2 id="sessionTitle">请选择练习场景</h2>
           </div>
-          <div class="status-pill" id="statusPill">idle</div>
+          <div class="status-pill" id="statusPill">待开始</div>
         </header>
 
         <div class="diagnostic-bar">
           <div>
-            <span>Mode</span>
-            <strong id="modeLabel">checking</strong>
+            <span>模式</span>
+            <strong id="modeLabel">检查中</strong>
           </div>
           <div>
-            <span>Session</span>
-            <strong id="sessionIdLabel">none</strong>
+            <span>会话</span>
+            <strong id="sessionIdLabel">暂无</strong>
           </div>
           <div>
-            <span>Turns</span>
+            <span>轮次</span>
             <strong id="turnCountLabel">0</strong>
           </div>
-          <button id="exportSessionBtn" class="secondary-button" disabled>Export JSON</button>
+          <button id="exportSessionBtn" class="secondary-button" disabled>导出 JSON</button>
         </div>
 
         <div class="goals-band">
           <div>
-            <h3>Goals</h3>
+            <h3>训练目标</h3>
             <ul id="goalList"></ul>
           </div>
           <div>
-            <h3>Keywords</h3>
+            <h3>关键词</h3>
             <div id="keywordList" class="keyword-list"></div>
           </div>
         </div>
@@ -105,43 +106,44 @@
         </div>
 
         <div class="composer-row">
-          <input id="mockInput" type="text" placeholder="Type a mock learner turn while Realtime is not connected">
-          <button id="sendMockBtn" class="secondary-button">Send Turn</button>
-          <button id="endBtn" class="danger-button" disabled>End</button>
+          <input id="mockInput" type="text" placeholder="实时语音不可用时，可在这里输入一句英文回答">
+          <button id="testVoiceBtn" class="secondary-button">测试语音</button>
+          <button id="sendMockBtn" class="secondary-button">发送回答</button>
+          <button id="endBtn" class="danger-button" disabled>结束练习</button>
         </div>
 
         <details class="event-log-panel">
-          <summary>Session events</summary>
+          <summary>会话事件</summary>
           <div id="eventLogList" class="event-log-list"></div>
         </details>
 
         <section id="reportPanel" class="report-panel hidden">
           <div class="report-header">
             <div>
-              <p class="eyebrow">Post-session report</p>
-              <h2>Practice summary</h2>
+              <p class="eyebrow">课后反馈报告</p>
+              <h2>练习总结</h2>
             </div>
             <div id="overallScore" class="score-dial">--</div>
           </div>
           <div id="scoreGrid" class="score-grid"></div>
           <div class="report-grid">
             <section>
-              <h3>Corrections</h3>
+              <h3>语法与表达纠错</h3>
               <div id="correctionList"></div>
             </section>
             <section>
-              <h3>Next Practice</h3>
+              <h3>下一步练习</h3>
               <ul id="practiceList"></ul>
             </section>
           </div>
           <section class="pronunciation-panel">
             <div>
-              <p class="eyebrow">Scripted pronunciation</p>
-              <h3 id="pronunciationText">Recommended sentence</h3>
+              <p class="eyebrow">跟读发音评测</p>
+              <h3 id="pronunciationText">推荐跟读句子</h3>
             </div>
             <div class="pronunciation-actions">
-              <button id="recordPronunciationBtn" class="secondary-button">Record</button>
-              <button id="mockPronunciationBtn" class="secondary-button">Score</button>
+              <button id="recordPronunciationBtn" class="secondary-button">录音</button>
+              <button id="mockPronunciationBtn" class="secondary-button">评分</button>
             </div>
             <div id="pronunciationResult" class="pronunciation-result"></div>
           </section>
@@ -149,7 +151,8 @@
       </section>
     </main>
 
-    <audio id="remoteAudio" autoplay></audio>
-    <script type="module" src="/app.js"></script>
+    <audio id="remoteAudio" autoplay playsinline></audio>
+    <div id="remoteMediaRoot" hidden></div>
+    <script type="module" src="/app.js?v=zh-20260607-recognition-guard"></script>
   </body>
 </html>

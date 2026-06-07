@@ -5,7 +5,7 @@ import { scenarios } from "../lib/scenarios.mjs";
 
 const scenario = scenarios.find((item) => item.id === "job_interview");
 
-test("createSummary uses DeepSeek V4 Pro when DeepSeek credentials are configured", async () => {
+test("createSummary uses DeepSeek Chat when DeepSeek credentials are configured", async () => {
   let requestUrl;
   let requestBody;
   const fakeFetch = async (url, options) => {
@@ -57,15 +57,15 @@ test("createSummary uses DeepSeek V4 Pro when DeepSeek credentials are configure
     env: {
       DEEPSEEK_API_KEY: "test-key",
       DEEPSEEK_BASE_URL: "https://api.deepseek.com",
-      DEEPSEEK_TEXT_MODEL: "deepseek-v4-pro",
+      DEEPSEEK_TEXT_MODEL: "deepseek-chat",
     },
     fetchImpl: fakeFetch,
   });
 
   assert.equal(requestUrl, "https://api.deepseek.com/v1/chat/completions");
-  assert.equal(requestBody.model, "deepseek-v4-pro");
+  assert.equal(requestBody.model, "deepseek-chat");
   assert.equal(requestBody.max_tokens, 8000);
-  assert.equal(summary.source, "deepseek_v4");
+  assert.equal(summary.source, "deepseek_chat");
   assert.equal(summary.overallScore, 82);
 });
 
@@ -133,7 +133,7 @@ test("createSummary retries DeepSeek when first response has empty content", asy
     env: {
       DEEPSEEK_API_KEY: "test-key",
       DEEPSEEK_BASE_URL: "https://api.deepseek.com",
-      DEEPSEEK_TEXT_MODEL: "deepseek-v4-pro",
+      DEEPSEEK_TEXT_MODEL: "deepseek-chat",
     },
     fetchImpl: fakeFetch,
   });
@@ -142,6 +142,6 @@ test("createSummary retries DeepSeek when first response has empty content", asy
   assert.equal(requestBodies[0].max_tokens, 8000);
   assert.equal(requestBodies[1].max_tokens, 12000);
   assert.equal(requestBodies[1].temperature, 0);
-  assert.equal(summary.source, "deepseek_v4");
+  assert.equal(summary.source, "deepseek_chat");
   assert.equal(summary.overallScore, 84);
 });

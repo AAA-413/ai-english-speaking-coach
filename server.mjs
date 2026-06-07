@@ -1,15 +1,18 @@
 import http from "node:http";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { tmpdir } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { scenarios, getScenario } from "./lib/scenarios.mjs";
 import {
-  createMockPronunciationAssessment,
   createMockSummary,
   mockTranscript,
 } from "./lib/mock-analysis.mjs";
 import { assessAzurePronunciation } from "./lib/azure-pronunciation.mjs";
+import { assessScriptedPronunciation } from "./lib/scripted-pronunciation.mjs";
 import { createSummary } from "./lib/openai-summary.mjs";
 import { transcribeAudio } from "./lib/openai-transcribe.mjs";
 import { createRealtimeClientSecret } from "./lib/realtime-session.mjs";
@@ -23,10 +26,12 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, "public");
+const execFileAsync = promisify(execFile);
 
 loadEnvFile(path.join(__dirname, ".env"));
 
 const port = Number(process.env.PORT || 3000);
+const clientEvents = [];
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -82,6 +87,35 @@ function createSessionId() {
 }
 
 async function handleApi(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/client-events") {
+    sendJson(res, 200, {
+      events: clientEvents.slice(-120),
+    });
+    return;
+  }
+
+  if (req.method === "DELETE" && url.pathname === "/api/client-events") {
+    clientEvents.length = 0;
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/client-events") {
+    const body = await readJson(req);
+    clientEvents.push({
+      at: new Date().toISOString(),
+      sessionId: body.sessionId || null,
+      mode: body.mode || null,
+      provider: body.provider || null,
+      type: String(body.type || "client:event").slice(0, 120),
+      detail: String(body.detail || "").slice(0, 500),
+      status: body.status || null,
+    });
+    if (clientEvents.length > 500) clientEvents.splice(0, clientEvents.length - 500);
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/health") {
     sendJson(res, 200, {
       ok: true,
@@ -90,7 +124,7 @@ async function handleApi(req, res, url) {
       realtimeModel: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2",
       transcribeModel: process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
       textModel: process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini",
-      deepSeekTextModel: process.env.DEEPSEEK_TEXT_MODEL || "deepseek-v4-pro",
+      deepSeekTextModel: process.env.DEEPSEEK_TEXT_MODEL || "deepseek-chat",
       realtimeProvider: process.env.REALTIME_PROVIDER || "openai",
       realtimeVoice: process.env.OPENAI_REALTIME_VOICE || "marin",
       useMockAnalysis: shouldUseMockAnalysis(),
@@ -103,6 +137,53 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/scenarios") {
     sendJson(res, 200, { scenarios });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/tts") {
+    const body = await readJson(req);
+    const text = String(body.text || "").trim();
+    if (!text) {
+      sendJson(res, 400, { error: "Missing text" });
+      return;
+    }
+    try {
+      sendJson(res, 200, await createLocalSpeechAudio({ text }));
+    } catch (error) {
+      sendJson(res, 500, {
+        error: "Local TTS failed",
+        detail: error.message || "Unable to generate speech audio",
+      });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/dialogue/reply") {
+    const body = await readJson(req);
+    const scenario = getScenario(body.scenarioId) || scenarios[0];
+    const turns = Array.isArray(body.turns) ? body.turns : [];
+    const userText = String(body.userText || "").trim();
+    if (!userText) {
+      sendJson(res, 200, {
+        source: "empty",
+        reply: scenario.followUpQuestions?.[0] || scenario.openingPrompt,
+      });
+      return;
+    }
+    try {
+      sendJson(res, 200, await createDialogueReply({
+        scenario,
+        level: body.level || scenario.level,
+        turns,
+        userText,
+      }));
+    } catch (error) {
+      sendJson(res, 200, {
+        source: "fallback",
+        providerError: error.message || "Dialogue reply failed",
+        reply: fallbackDialogueReply({ scenario, userText, turns }),
+      });
+    }
     return;
   }
 
@@ -142,9 +223,15 @@ async function handleApi(req, res, url) {
           correctionMode: body.correctionMode || "post_session",
           sessionId,
         });
-        const serverStart = await startVolcDoubaoVoiceChat({
-          session: volcSession,
-        });
+        const serverStart = body.deferServerStart
+          ? {
+            ok: false,
+            status: "deferred",
+            message: "StartVoiceChat will run after the browser joins the RTC room.",
+          }
+          : await startVolcDoubaoVoiceChat({
+            session: volcSession,
+          });
 
         sendJson(res, 200, {
           mode: "volc_doubao_setup",
@@ -152,7 +239,9 @@ async function handleApi(req, res, url) {
           sessionId,
           reason: serverStart.ok
             ? "Volc Doubao O2.0 StartVoiceChat started; browser should join the same RTC room."
-            : `Volc Doubao O2.0 config is ready; StartVoiceChat ${serverStart.status}.`,
+            : serverStart.status === "deferred"
+              ? "Volc Doubao O2.0 config is ready; browser will start the agent after RTC join."
+              : `Volc Doubao O2.0 config is ready; StartVoiceChat ${serverStart.status}.`,
           scenario,
           model: volcSession.model,
           rtcAppId: volcSession.rtcAppId,
@@ -219,6 +308,46 @@ async function handleApi(req, res, url) {
         sessionId,
         reason: error.message || "Realtime session creation failed",
         scenario,
+      });
+    }
+    return;
+  }
+
+  const realtimeStartMatch = url.pathname.match(/^\/api\/realtime\/session\/([^/]+)\/start$/);
+  if (req.method === "POST" && realtimeStartMatch) {
+    const body = await readJson(req);
+    const scenario = getScenario(body.scenarioId) || scenarios[0];
+    const sessionId = realtimeStartMatch[1];
+    try {
+      const volcSession = createVolcDoubaoRealtimeSession({
+        scenario,
+        level: body.level || scenario.level,
+        correctionMode: body.correctionMode || "post_session",
+        sessionId,
+      });
+      const serverStart = await startVolcDoubaoVoiceChat({
+        session: volcSession,
+      });
+      sendJson(res, 200, {
+        provider: "volc_doubao",
+        sessionId,
+        roomId: volcSession.roomId,
+        taskId: volcSession.taskId,
+        userId: volcSession.userId,
+        agentUserId: volcSession.agentUserId,
+        serverStart,
+        serverStarted: Boolean(serverStart.ok),
+      });
+    } catch (error) {
+      sendJson(res, 200, {
+        provider: "volc_doubao",
+        sessionId,
+        serverStarted: false,
+        serverStart: {
+          ok: false,
+          status: "error",
+          message: error.message || "StartVoiceChat failed",
+        },
       });
     }
     return;
@@ -326,27 +455,39 @@ async function handleApi(req, res, url) {
         });
         return;
       } catch (error) {
-        const assessment = createMockPronunciationAssessment({
-          referenceText: body.referenceText,
+        sendJson(res, 200, {
           scenarioId: body.scenarioId,
+          referenceText: body.referenceText,
+          audioReceived: true,
+          mimeType: body.mimeType || null,
+          durationMs: body.durationMs || null,
+          recognizedTranscript: body.recognizedTranscript || "",
+          ...(assessScriptedPronunciation({
+            referenceText: body.referenceText,
+            recognizedTranscript: body.recognizedTranscript,
+            durationMs: body.durationMs,
+            audioReceived: true,
+            providerError: error.message || "Azure pronunciation failed",
+          })),
         });
-        assessment.audioReceived = true;
-        assessment.mimeType = body.mimeType || null;
-        assessment.durationMs = body.durationMs || null;
-        assessment.providerError = error.message || "Azure pronunciation failed";
-        sendJson(res, 200, assessment);
         return;
       }
     }
 
-    const assessment = createMockPronunciationAssessment({
-      referenceText: body.referenceText,
+    sendJson(res, 200, {
       scenarioId: body.scenarioId,
+      referenceText: body.referenceText,
+      audioReceived: Boolean(body.audioBase64),
+      mimeType: body.mimeType || null,
+      durationMs: body.durationMs || null,
+      recognizedTranscript: body.recognizedTranscript || "",
+      ...(assessScriptedPronunciation({
+        referenceText: body.referenceText,
+        recognizedTranscript: body.recognizedTranscript,
+        durationMs: body.durationMs,
+        audioReceived: Boolean(body.audioBase64),
+      })),
     });
-    assessment.audioReceived = Boolean(body.audioBase64);
-    assessment.mimeType = body.mimeType || null;
-    assessment.durationMs = body.durationMs || null;
-    sendJson(res, 200, assessment);
     return;
   }
 
@@ -383,6 +524,117 @@ function shouldUseMockPronunciation() {
     || process.env.USE_MOCK_PRONUNCIATION === "true"
     || !process.env.AZURE_SPEECH_KEY
     || !(process.env.AZURE_SPEECH_ENDPOINT || process.env.AZURE_SPEECH_REGION);
+}
+
+async function createDialogueReply({
+  scenario,
+  level,
+  turns,
+  userText,
+  env = process.env,
+  fetchImpl = fetch,
+}) {
+  if (!env.DEEPSEEK_API_KEY) {
+    return {
+      source: "local_fallback",
+      reply: fallbackDialogueReply({ scenario, userText, turns }),
+    };
+  }
+
+  const baseUrl = (env.DEEPSEEK_BASE_URL || "https://api.deepseek.com").replace(/\/$/, "");
+  const model = env.DEEPSEEK_DIALOGUE_MODEL || "deepseek-chat";
+  const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    signal: AbortSignal.timeout(10000),
+    headers: {
+      Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.5,
+      max_tokens: 140,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "You are an English speaking coach in a live voice role-play.",
+            `Scenario: ${scenario.title}.`,
+            `You play the role of ${scenario.aiRole}; the learner is the ${scenario.userRole}.`,
+            `Learner level: ${level || scenario.level}.`,
+            "Reply only in natural English.",
+            "Keep the reply short: one or two sentences.",
+            "Ask exactly one follow-up question.",
+            "Do not give long grammar explanations during live conversation.",
+          ].join("\n"),
+        },
+        ...turns.slice(-6).map((turn) => ({
+          role: turn.speaker === "assistant" ? "assistant" : "user",
+          content: String(turn.transcript || "").slice(0, 500),
+        })),
+        {
+          role: "user",
+          content: userText,
+        },
+      ],
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `DeepSeek dialogue failed with ${response.status}`);
+  }
+
+  const reply = payload?.choices?.[0]?.message?.content?.trim();
+  if (!reply) throw new Error("DeepSeek dialogue returned empty reply");
+  return {
+    source: "deepseek_dialogue",
+    model,
+    reply: reply.replace(/\s+/g, " ").slice(0, 500),
+  };
+}
+
+function fallbackDialogueReply({ scenario, userText, turns }) {
+  if (scenario.id === "restaurant_ordering") {
+    if (/latte|coffee|tea|drink/i.test(userText)) return "Sure. Would you like that hot or iced?";
+    return "Of course. What size would you like?";
+  }
+  if (scenario.id === "business_meeting") {
+    return "Thanks for the update. What is the biggest blocker we should resolve first?";
+  }
+  if (/project|product|manager|work/i.test(userText)) {
+    return "Good. What was your specific impact in that project?";
+  }
+  return scenario.followUpQuestions?.[turns.length % Math.max(1, scenario.followUpQuestions.length)]
+    || "Could you give me one specific example?";
+}
+
+async function createLocalSpeechAudio({ text, env = process.env }) {
+  const spokenText = String(text).replace(/\s+/g, " ").slice(0, 700);
+  const voice = env.MACOS_TTS_VOICE || "Samantha";
+  const dir = await mkdtemp(path.join(tmpdir(), "english-coach-tts-"));
+  const aiffPath = path.join(dir, "speech.aiff");
+  const m4aPath = path.join(dir, "speech.m4a");
+
+  try {
+    await execFileAsync("/usr/bin/say", ["-v", voice, "-o", aiffPath, spokenText], {
+      timeout: 20000,
+      maxBuffer: 1024 * 1024,
+    });
+    await execFileAsync("/usr/bin/afconvert", ["-f", "m4af", "-d", "aac", aiffPath, m4aPath], {
+      timeout: 20000,
+      maxBuffer: 1024 * 1024,
+    });
+    const audio = await readFile(m4aPath);
+    return {
+      source: "macos_say",
+      voice,
+      mimeType: "audio/mp4",
+      audioBase64: audio.toString("base64"),
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 async function serveStatic(req, res, url) {
