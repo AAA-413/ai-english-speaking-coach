@@ -4,7 +4,8 @@ AI English Speaking Coach is an AI-powered English speaking practice project. Th
 
 ## Demo Video
 
-- Video URL: `TODO: paste the final online video link here`
+- Video URL: [20260607182246.mp4](https://github.com/AAA-413/ai-english-speaking-coach/releases/download/demo-video-20260607/20260607182246.mp4)
+- Release page: [demo-video-20260607](https://github.com/AAA-413/ai-english-speaking-coach/releases/tag/demo-video-20260607)
 - Recording script: [Demo video script](docs/demo-video-script.md)
 
 ## Current Status
